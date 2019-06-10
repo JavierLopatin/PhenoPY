@@ -1,46 +1,29 @@
-
-
-# import datetime
-
-from matplotlib import pyplot as plt
-
-
-def PhenoShape(inData, dates=None, rollWindow=None, nGS=46, nan_replace=None, saveRaster=None):
+def PhenoShape(inData, saveRaster, dates=None, nan_replace=None,
+               rollWindow=None, nGS=46, chuckSize=256):
     """
     Explanaition here....
     """
     import xarray as xr
-    import pandas as pd
     import numpy as np
+    from numba import jit
+    import rasterio
+    from dash import ProgressBar
 
     # get variables
-    if isinstance(inData, str):
-        try:
-            import rasterio
-            # load raster as a xarray
-            xarray = xr.open_rasterio(inData).rename({'band': 'time'})
-            # load also metadata
-            with rasterio.open(inData) as img:
-                meta = img.profile
-            # assing dates as time values
-            xarray.time.values = dates
-            # attribites
-            attrs = xarray.attrs
-            # add day of the year coordinates
-            xarray.coords['doy'] = xarray.time.dt.dayofyear
-        except RasterioIOError:
-            print('ERROR: data must be a GDAL format')
-    elif isinstance(xarray, xr.DataArray):
-        try:
-            # add day of the year coordinates
-            xarray.coords['doy'] = xarray.time.dt.dayofyear
-            # attribites
-            attrs = xarray.attrs
-        except TypeError:
-            print('ERROR: The xarray do not have "time" dimention in datetime64 format')
-    else:
-        print('ERROR: inData must be either a string with the path to a'
-              ' raster image or a xarray with time dimension with dates.')
+    try:
+        # load raster as a xarray
+        xarray = xr.open_rasterio(inData, chunks={'x': chuckSize, 'y': chuckSize}).rename({'band': 'time'})
+        # load also metadata
+        with rasterio.open(inData) as img:
+            meta = img.profile
+        # assing dates as time values
+        xarray.time.values = dates
+        # attribites
+        attrs = xarray.attrs
+        # add day of the year coordinates
+        xarray.coords['doy'] = xarray.time.dt.dayofyear
+    except RasterioIOError:
+        print('ERROR: data must be a GDAL format')
 
     # sort basds according to day-of-the-year
     xarray = xarray.sortby('doy')
@@ -53,8 +36,9 @@ def PhenoShape(inData, dates=None, rollWindow=None, nGS=46, nan_replace=None, sa
 
     # prepare inputs to getPheno
     x = xarray.doy.values
-    y = xarray.values
+    y = xarray.values  # [:,100,100]
 
+    @jit
     def getPheno(y, x):
         """
         Apply linear interpolation in the 'time' axis
@@ -62,31 +46,35 @@ def PhenoShape(inData, dates=None, rollWindow=None, nGS=46, nan_replace=None, sa
         y: ndarray with VI values
         """
         inds = np.isnan(y)  # check if array has NaN values
-        if inds.any(): # if inds have at least one True
-            x = x[~inds]
-            y = y[~inds]
-            xnew = np.linspace(np.min(x), np.max(x), nGS, dtype='int16')
-            ynew = np.interp(xnew, x, y)
-
+        if np.sum(inds) == len(x):  # check is all values are NaN
+            return y[0:nGS]
         else:
-            xnew = np.linspace(np.min(x), np.max(x), nGS, dtype='int16')
-            ynew = np.interp(xnew, x, y)
+            if inds.any():  # if inds have at least one True
+                x = x[~inds]
+                y = y[~inds]
+                xnew = np.linspace(np.min(x), np.max(x), nGS, dtype='int16')
+                ynew = np.interp(xnew, x, y)
 
-        return xnew, ynew
+            else:
+                xnew = np.linspace(np.min(x), np.max(x), nGS, dtype='int16')
+                ynew = np.interp(xnew, x, y)
+
+            return ynew
 
     # get phenology shape accross the time axis
-    xnew, phen = np.apply_along_axis(getPheno, 0, y, x)
+    phen = np.apply_along_axis(getPheno, 0, y, x)
     # add phenology into an xarray format according to the input xarray
     phen = xr.DataArray(phen, dims=xarray.dims, coords={
-                        'time': xnew[:, 0, 0],
+                        'time': np.linspace(np.min(x), np.max(x), nGS, dtype='int16'),
                         'y': xarray.coords['y'],
                         'x': xarray.coords['x']},
                         attrs=attrs)
-    if saveRaster is None:
-        return phen
-    elif isinstance(saveRaster, str):
-        # edit metadata before save the raster
-        meta.update(count=nGS, dtype=phen.values.dtype)
-        # save results
-        with rasterio.open(saveRaster, "w", **meta) as dst:
-            dst.write(phen)
+    # phen[10,:,:].plot()
+
+    # save to disk
+
+    # edit metadata before save the raster
+    meta.update(count=nGS, dtype=phen.values.dtype)
+    # save results
+    with rasterio.open(saveRaster, "w", **meta) as dst:
+        dst.write(phen)
