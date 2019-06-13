@@ -13,12 +13,14 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import xarray as xr
-from numba import jit
 from scipy.integrate import simps
+from tqdm import tqdm
+import concurrent.futures
+from functools import partial
 
-
+# ---------------------------------------------------------------------------#
 def PhenoPlot(X, Y, inData, dates, saveFigure=None, ylim=None, rollWindow=None,
-              type=1, nGS=46, ylab='NDVI'):
+    type=1, nGS=46, ylab='NDVI'):
     """
     Plot the PhenoShape curve along with the yearly data
 
@@ -79,6 +81,7 @@ def PhenoPlot(X, Y, inData, dates, saveFigure=None, ylim=None, rollWindow=None,
     x = xarray.doy.values
     phen = _getPheno(y, x, nGS)
     xnew = np.linspace(1, 365, nGS, dtype='int16')
+    plt.plot(xnew, phen, '-', x, y, 'o')
 
     # plot
     if type == 1:
@@ -117,9 +120,10 @@ def PhenoPlot(X, Y, inData, dates, saveFigure=None, ylim=None, rollWindow=None,
         plt.savefig(saveFigure)
     plt.show()
 
+# ---------------------------------------------------------------------------#
 
-def PhenoShape(inData, saveRaster, dates=None, nan_replace=None,
-               rollWindow=None, nGS=46, chuckSize=256):
+def PhenoShape(inData, outData, dates=None, nan_replace=None, rollWindow=None,
+    nGS=46, chuckSize=256, n_jobs=4):
     """
     Process phenological shape of remote sensing data by
     folding data to day-of-the-year. Process is done in a block-by-block way
@@ -129,62 +133,24 @@ def PhenoShape(inData, saveRaster, dates=None, nan_replace=None,
     ----------
     - inData: Absolute path to the original timeseries data
     - dates: Dates of the original timeseries data [dtype: datetime64[ns]]
-    - saveRaster: Absolute path with extention to save raster on disk
-    - ylim: Limits of the Y axis [default the y min() and max() values]
+    - outData: Absolute path with extention to save raster on disk
     - rollWindow: integer with value of avarage smoothing of linear trend [default None]
     - nGS: Number of observations to predict the PhenoShape [default 46: one per week]
+    - chuckSize: Size of the raster chunks that would be load to memory each
+                time. Needs to be multiple of 16.
     """
-    # get variables
+    # call _getPheno2 function to loal
+    do_work = partial(_getPheno2, dates=dates, nGS=nGS, nan_replace=nan_replace,
+        rollWindow=rollWindow)
+    # apply PhenoShape with parallel processing
     try:
-        # load raster as a xarray
-        xarray = xr.open_rasterio(
-            inData, chunks={'x': chuckSize, 'y': chuckSize}).rename({'band': 'time'})
-        # load also metadata
-        with rasterio.open(inData) as img:
-            meta = img.profile
-        # assing dates as time values
-        xarray.time.values = dates
-        # attribites
-        attrs = xarray.attrs
-        # add day of the year coordinates
-        xarray.coords['doy'] = xarray.time.dt.dayofyear
-    except TypeError:
-        print('ERROR: data must be a GDAL format')
+        _parallel_process(inData, outData, do_work, nGS, n_jobs, chuckSize)
+    except AttributeError:
+        print('ERROR in parallel processin...')
 
-    # sort basds according to day-of-the-year
-    xarray = xarray.sortby('doy')
-    # rearrange time dimension for smoothing and interpolation
-    xarray['time'] = xarray['doy']
-    # turn a value to NaN
-    if nan_replace is not None:
-        xarray = xarray.where(xarray.values != nan_replace)
-    # rolling average using moving window
-    if rollWindow is not None:
-        xarray = xarray.rolling(time=rollWindow, center=True).mean()
-    # prepare inputs to getPheno
-    x = xarray.doy.values
-    y = xarray.values
+# ---------------------------------------------------------------------------#
 
-    # get phenology shape accross the time axis
-    phen = np.apply_along_axis(_getPheno, 0, y, x, nGS)
-    xnew = np.linspace(1, 365, nGS, dtype='int16')
-    # add phenology into an xarray format according to the input xarray
-    phen = xr.DataArray(phen, dims=xarray.dims, coords={
-                        'time': np.linspace(np.min(x), np.max(x), nGS, dtype='int16'),
-                        'y': xarray.coords['y'],
-                        'x': xarray.coords['x']},
-                        attrs=attrs)
-    # edit metadata before save the raster
-    meta.update(count=nGS, dtype=phen.values.dtype, nodata=np.nan)
-    # save results
-    with rasterio.open(saveRaster, "w", **meta) as dst:
-        dst.write(phen)
-        # save band description to metadata
-        for i in range(len(xnew)):
-            dst.set_band_description(i + 1, 'DOY ' + str(xnew[i]))
-
-
-def PhenoLSP(phenoshape, saveRaster, nGS=46, chuckSize=256):
+def PhenoLSP(inData, outData, nGS=46, min_sep=23, n_jobs=4, chuckSize=256):
     """
     Obtain land surfurface phenology metrics for a PhenoShape product
 
@@ -215,35 +181,58 @@ def PhenoLSP(phenoshape, saveRaster, nGS=46, chuckSize=256):
                 'ROG - Rate of greening',
                 'ROS - Rate of senescence']
 
-    # load raster images of PhenoShape
-    xarray = xr.open_rasterio(
-        phenoshape, chunks={'x': chuckSize, 'y': chuckSize})
-    # load also metadata
-    with rasterio.open(phenoshape) as img:
-        meta = img.profile
+    # call _getPheno2 function to loal
+    do_work = partial(_cal_LSP, min_sep=min_sep, nGS=nGS)
+    # apply PhenoShape with parallel processing
+    try:
+        _parallel_process(inData, outData, do_work, nGS, n_jobs, chuckSize)
+    except AttributeError:
+        print('ERROR in parallel processin...')
 
-    # prepare input data for _LSP
-    x = np.linspace(1, 365, nGS, dtype='int16')
-    y = xarray.values
-
-    # estimate LSP metrics along the 0 axis
-    LSP = np.apply_along_axis(_LSP, 0, y, x, nGS)
-
-    # edit metadata before save the raster
-    meta.update(count=LSP.shape[0], dtype=LSP.dtype, nodata=np.nan)
-    # save results
-    with rasterio.open(saveRaster, "w", **meta) as dst:
-        dst.write(LSP)
-        # save band description to metadata
-        for i in range(LSP.shape[0]):
-            dst.set_band_description(i + 1, outnames[i])
 
 
 ###############################################################################
 # Utility functions
 ###############################################################################
 
-@jit
+def _parallel_process(inData, outData, do_work, count,  n_jobs, chuckSize):
+    """
+    Process infile block-by-block with parallel processing
+    and write to a new file.
+    Input function must be call _main() and need only one input (ndarray)
+    """
+    # apply parallel processing with rasterio
+    with rasterio.Env():
+        with rasterio.open(inData) as src:
+            # Create a destination dataset based on source params. The
+            # destination will be tiled, and we'll process the tiles
+            # concurrently.
+            profile = src.profile
+            profile.update(blockxsize=chuckSize, blockysize=chuckSize,
+                           count=count, dtype='float64', tiled=True)
+
+            with rasterio.open(outData, "w", **profile) as dst:
+                # Materialize a list of destination block windows
+                # that we will use in several statements below.
+                windows = [window for ij, window in dst.block_windows()]
+                # This generator comprehension gives us raster data
+                # arrays for each window. Later we will zip a mapping
+                # of it with the windows list to get (window, result)
+                # pairs.
+                data_gen = (src.read(window=window) for window in windows)
+                with concurrent.futures.ProcessPoolExecutor(
+                    max_workers=n_jobs
+                ) as executor:
+                    # Map the a function over the raster
+                    # data generator, zip the resulting iterator with
+                    # the windows list, and as pairs come back we
+                    # write data to the destination dataset.
+                    for window, result in zip(
+                        tqdm(windows), executor.map(do_work, data_gen)
+                    ):
+                        dst.write(result, window=window)
+
+
 def _getPheno(y, x, nGS):
     """
     Apply linear interpolation in the 'time' axis
@@ -265,6 +254,28 @@ def _getPheno(y, x, nGS):
 
     return ynew
 
+def _getPheno2(dstack, dates, nGS, nan_replace, rollWindow):
+    # load raster as a xarray
+    xarray = xr.DataArray(dstack)
+    xarray.coords['dim_0'] = dates
+    xarray.coords['doy'] = xarray.dim_0.dt.dayofyear
+
+    # sort basds according to day-of-the-year
+    xarray = xarray.sortby('doy')
+    # rearrange time dimension for smoothing and interpolation
+    xarray['dim_0'].values = xarray['doy']
+    # turn a value to NaN
+    if nan_replace is not None:
+        xarray = xarray.where(xarray.values != nan_replace)
+    # rolling average using moving window
+    if rollWindow is not None:
+        xarray = xarray.rolling(dim_0=rollWindow, center=True).mean()
+    # prepare inputs to getPheno
+    x = xarray.doy.values
+    y = xarray.values
+
+    # get phenology shape accross the time axis
+    return np.apply_along_axis(_getPheno, 0, y, x, nGS)
 
 def _detect_peaks(spec, min_sep, valley=False):
     """
@@ -355,7 +366,7 @@ def _detect_peaks(spec, min_sep, valley=False):
     return ind
 
 
-def _LSP(y, x, nGS=46):
+def _LSP(y, x, min_sep):
     """
     Obtain land surfurface phenology metrics
 
@@ -382,14 +393,14 @@ def _LSP(y, x, nGS=46):
     else:
         try:
             # obtain peaks
-            peak_max = _detect_peaks(y, nGS / 2)
-            peak_min = _detect_peaks(y, nGS / 2, valley=True)
+            peak_max = _detect_peaks(y, min_sep)
+            peak_min = _detect_peaks(y, min_sep, valley=True)
             if len(peak_max) == 0:
                 peak_max = x[np.where(y == np.max(y))[0]]
             elif len(peak_max) > 1:
                 peak_max = peak_max[0]
             else:
-                print('ERROR: cannot find peak values')
+                pass
             if len(peak_min) == 0 or len(peak_min) == 1:
                 # Find the location of where the values change according to the neightbors
                 # This is in case the interpolation creates a straoght line when no values
@@ -400,7 +411,7 @@ def _LSP(y, x, nGS=46):
             elif len(peak_min) > 2:
                 peak_min = np.array([peak_min[0], peak_min[-1]])
             else:
-                print('ERROR: cannot find valley values')
+                pass
 
             # Get LSP metrics
             SOS = x[peak_min[0]]  # start of season
@@ -421,10 +432,23 @@ def _LSP(y, x, nGS=46):
                 id = np.array([item for sublist in id for item in sublist])
                 IOS = simps(y[id], x[id])  # integral of season
             # rate of greening [slope SOS-POS]
-            ROG = (vPOS - vSOS) / (POS - SOS)
+            if vPOS == np.nan or vSOS == np.nan or EOS == np.nan or POS == np.nan:
+                ROG = np.nan
+            else:
+                ROG = (vPOS - vSOS) / (POS - SOS)
             # rate of senescence [slope POS-EOS]
-            ROS = (vEOS - vPOS) / (EOS - POS)
-            out = np.array((SOS, POS, EOS, vSOS, vPOS, vEOS, LOS, AOS, IOS, ROG, ROS))
-            return out
+            if vEOS == np.nan or vPOS == np.nan or EOS == np.nan or POS == np.nan:
+                ROG = np.nan
+            else:
+                ROS = (vEOS - vPOS) / (EOS - POS)
+
+            return np.array((SOS, POS, EOS, vSOS, vPOS, vEOS, LOS, AOS, IOS, ROG, ROS))
         except IndexError:
             return np.repeat(np.nan, num)
+
+def _cal_LSP(dstack, min_sep, nGS):
+
+    # prepare input data for _LSP
+    x = np.linspace(1, 365, nGS, dtype='int16')
+    # estimate LSP metrics along the 0 axis
+    return np.apply_along_axis(_LSP, 0, dstack, x, nGS)
