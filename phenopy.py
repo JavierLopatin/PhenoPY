@@ -13,10 +13,14 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import xarray as xr
-from scipy.integrate import simps
+from scipy.integrate import trapz
+from scipy.stats import skew
 from tqdm import tqdm
 import concurrent.futures
 from functools import partial
+
+# suppress numpy warnings of zero division
+np.seterr(divide='ignore', invalid='ignore')
 
 # ---------------------------------------------------------------------------#
 def PhenoPlot(X, Y, inData, dates, saveFigure=None, ylim=None, rollWindow=None,
@@ -81,7 +85,6 @@ def PhenoPlot(X, Y, inData, dates, saveFigure=None, ylim=None, rollWindow=None,
     x = xarray.doy.values
     phen = _getPheno(y, x, nGS)
     xnew = np.linspace(1, 365, nGS, dtype='int16')
-    plt.plot(xnew, phen, '-', x, y, 'o')
 
     # plot
     if type == 1:
@@ -139,14 +142,30 @@ def PhenoShape(inData, outData, dates=None, nan_replace=None, rollWindow=None,
     - chuckSize: Size of the raster chunks that would be load to memory each
                 time. Needs to be multiple of 16.
     """
+
+    # get names for output bands
+    doy = np.linspace(1, 365, nGS, dtype='int16')
+    bandNames = []
+    for i in range(nGS):
+        bandNames.append('DOY - ' + str(doy[i]))
+
     # call _getPheno2 function to loal
     do_work = partial(_getPheno2, dates=dates, nGS=nGS, nan_replace=nan_replace,
         rollWindow=rollWindow)
+
     # apply PhenoShape with parallel processing
     try:
-        _parallel_process(inData, outData, do_work, nGS, n_jobs, chuckSize)
+        _parallel_process(inData, outData, do_work, nGS, n_jobs, chuckSize, bandNames)
+        # read metadata
+        with rasterio.open(outData) as dst:
+            meta = dst.profile
+        # save band name to metadata
+        with rasterio.open(outData, "w", **meta) as dst:
+            for i in range(nGS):
+                dst.set_band_description(i + 1, 'DOY ' + str(doy[i]))
     except AttributeError:
         print('ERROR in parallel processin...')
+
 
 # ---------------------------------------------------------------------------#
 
@@ -168,8 +187,9 @@ def PhenoLSP(inData, outData, nGS=46, min_sep=23, n_jobs=4, chuckSize=256):
     ROG = Rate of greening [slope SOS-POS]
     ROS = Rate of senescence [slope POS-EOS]
     """
-
-    outnames = ['SOS - DOY of Start of season',
+    # set variables
+    nval = 12  # number of output variables
+    bandNames = ['SOS - DOY of Start of season',  # name of output bands
                 'POS - DOY of Peak of season',
                 'EOS - DOY of End of season',
                 'vSOS - Vaues of start os season',
@@ -179,13 +199,22 @@ def PhenoLSP(inData, outData, nGS=46, min_sep=23, n_jobs=4, chuckSize=256):
                 'AOS - Amplitude od season',
                 'IOS - Integral of season',
                 'ROG - Rate of greening',
-                'ROS - Rate of senescence']
+                'ROS - Rate of senescence',
+                'SW - Skewness of PhenoShape']
 
     # call _getPheno2 function to loal
     do_work = partial(_cal_LSP, min_sep=min_sep, nGS=nGS)
     # apply PhenoShape with parallel processing
     try:
-        _parallel_process(inData, outData, do_work, nGS, n_jobs, chuckSize)
+        _parallel_process(inData, outData, do_work, nval, n_jobs, chuckSize, bandNames)
+        # read metadata
+        with rasterio.open(outData) as dst:
+            meta = dst.profile
+        # save band names in metadata
+        with rasterio.open(outData, "w", **meta) as dst:
+            # save band description to metadata
+            for i in range(nval):
+                dst.set_band_description(i + 1, outnames[i])
     except AttributeError:
         print('ERROR in parallel processin...')
 
@@ -195,7 +224,7 @@ def PhenoLSP(inData, outData, nGS=46, min_sep=23, n_jobs=4, chuckSize=256):
 # Utility functions
 ###############################################################################
 
-def _parallel_process(inData, outData, do_work, count,  n_jobs, chuckSize):
+def _parallel_process(inData, outData, do_work, count,  n_jobs, chuckSize, bandNames):
     """
     Process infile block-by-block with parallel processing
     and write to a new file.
@@ -231,7 +260,11 @@ def _parallel_process(inData, outData, do_work, count,  n_jobs, chuckSize):
                         tqdm(windows), executor.map(do_work, data_gen)
                     ):
                         dst.write(result, window=window)
+                # save band description to metadata
+                for i in range(profile['count']):
+                    dst.set_band_description(i + 1, bandNames[i])
 
+# ---------------------------------------------------------------------------#
 
 def _getPheno(y, x, nGS):
     """
@@ -240,7 +273,7 @@ def _getPheno(y, x, nGS):
     y: ndarray with VI values
     """
     inds = np.isnan(y)  # check if array has NaN values
-    if np.sum(inds) == len(x):  # check is all values are NaN
+    if np.sum(inds) == len(y):  # check is all values are NaN
         return y[0:nGS]
     else:
         if inds.any():  # if inds have at least one True
@@ -254,7 +287,17 @@ def _getPheno(y, x, nGS):
 
     return ynew
 
+# ---------------------------------------------------------------------------#
+
 def _getPheno2(dstack, dates, nGS, nan_replace, rollWindow):
+    """
+    Obtain shape of phenological responses
+
+    Parameters
+    ----------
+    - dstack: 3D arrays
+
+    """
     # load raster as a xarray
     xarray = xr.DataArray(dstack)
     xarray.coords['dim_0'] = dates
@@ -277,23 +320,25 @@ def _getPheno2(dstack, dates, nGS, nan_replace, rollWindow):
     # get phenology shape accross the time axis
     return np.apply_along_axis(_getPheno, 0, y, x, nGS)
 
+# ---------------------------------------------------------------------------#
+
 def _detect_peaks(spec, min_sep, valley=False):
     """
-    Detects peaks.
+    Detects peaks and bottoms.
 
     Parameters
     ----------
-    spec : 1D array
+    - spec: 1D array
         The specrum to analyze.
 
-    valley : bool
+    - valley: bool
         Whether to search for peaks (positive) or valleys (negative).
         Default: False
 
     Returns
     -------
     1D array_like
-        indeces of the peaks in `spec`.
+        Indeces of the peaks in `spec`.
 
     Notes
     -----
@@ -302,11 +347,11 @@ def _detect_peaks(spec, min_sep, valley=False):
 
     The function can handle NaN's
 
-    See this IPython Notebook [1]_.
+    See this IPython Notebook [1].
 
     References
         ----------
-    .. [1] http://nbviewer.ipython.org/github/demotu/BMC/blob/master/notebooks/DetectPeaks.ipynb
+    [1] http://nbviewer.ipython.org/github/demotu/BMC/blob/master/notebooks/DetectPeaks.ipynb
 
     """
     # set default values
@@ -365,27 +410,38 @@ def _detect_peaks(spec, min_sep, valley=False):
 
     return ind
 
+# ---------------------------------------------------------------------------#
 
 def _LSP(y, x, min_sep):
     """
     Obtain land surfurface phenology metrics
 
-    outputs
+    Parameters
+    ----------
+    - y: 1D array
+        PhenoShape data
+    - x: 1D array
+        DOY vaues for PhenoShape data
+
+    Outputs
     -------
-    SOS = DOY of start of season
-    POS = DOY of peak of season
-    EOS = DOY of end of season
-    vSOS = Value at start of season
-    vPOS = Value at peak of season
-    vEOS = Value at end of season
-    LOS = Length of season (DOY)
-    AOS = Amplitude of season (in value units)
-    IOS = Integral of season (SOS-EOS)
-    ROG = Rate of greening [slope SOS-POS]
-    ROS = Rate of senescence [slope POS-EOS]
+    - 2D array with the following variables:
+
+        SOS = DOY of start of season
+        POS = DOY of peak of season
+        EOS = DOY of end of season
+        vSOS = Value at start of season
+        vPOS = Value at peak of season
+        vEOS = Value at end of season
+        LOS = Length of season (DOY)
+        AOS = Amplitude of season (in value units)
+        IOS = Integral of season (SOS-EOS)
+        ROG = Rate of greening [slope SOS-POS]
+        ROS = Rate of senescence [slope POS-EOS]
+        SW = Skewness of the PhenoShape distribution
     """
     # set general data
-    num = 11  # number of variables to output
+    num = 12  # number of variables to output
 
     inds = np.isnan(y)  # check if array has NaN values
     if np.sum(inds) > 0:  # check is all values are NaN
@@ -430,24 +486,45 @@ def _LSP(y, x, min_sep):
                 for i in range(len(green)):
                     id.append((x == green[i]).nonzero()[0])
                 id = np.array([item for sublist in id for item in sublist])
-                IOS = simps(y[id], x[id])  # integral of season
+                IOS = trapz(y[id], x[id])  # integral of season
             # rate of greening [slope SOS-POS]
-            if vPOS == np.nan or vSOS == np.nan or EOS == np.nan or POS == np.nan:
+            if vPOS is np.nan or vSOS is np.nan or EOS is np.nan or POS is np.nan:
                 ROG = np.nan
             else:
-                ROG = (vPOS - vSOS) / (POS - SOS)
+                ROG = (vPOS - vSOS)/(POS - SOS)
             # rate of senescence [slope POS-EOS]
-            if vEOS == np.nan or vPOS == np.nan or EOS == np.nan or POS == np.nan:
+            if vEOS is np.nan or vPOS is np.nan or EOS is np.nan or POS is np.nan:
                 ROG = np.nan
             else:
-                ROS = (vEOS - vPOS) / (EOS - POS)
+                ROS = (vEOS - vPOS)/(EOS - POS)
+            SW = skew(y)
 
-            return np.array((SOS, POS, EOS, vSOS, vPOS, vEOS, LOS, AOS, IOS, ROG, ROS))
+            return np.array((SOS, POS, EOS, vSOS, vPOS, vEOS, LOS, AOS, IOS, ROG, ROS, SW))
         except IndexError:
             return np.repeat(np.nan, num)
 
-def _cal_LSP(dstack, min_sep, nGS):
+# ---------------------------------------------------------------------------#
 
+def _cal_LSP(dstack, min_sep, nGS):
+    """
+    Process the _LSP funciton into an 3D arrays
+
+    Parameters
+    ----------
+    - dstack: 3D array
+        PhenoShape data.
+
+    - min_sep: integer
+         Distance to consider betweem peaks and bottoms.
+
+    - nGS: integer
+        Number of DOY values
+
+    Output
+    ------
+    - 3D arrays
+        Stack with the LSP metrics descibes in _LSP
+    """
     # prepare input data for _LSP
     x = np.linspace(1, 365, nGS, dtype='int16')
     # estimate LSP metrics along the 0 axis
