@@ -156,13 +156,6 @@ def PhenoShape(inData, outData, dates=None, nan_replace=None, rollWindow=None,
     # apply PhenoShape with parallel processing
     try:
         _parallel_process(inData, outData, do_work, nGS, n_jobs, chuckSize, bandNames)
-        # read metadata
-        with rasterio.open(outData) as dst:
-            meta = dst.profile
-        # save band name to metadata
-        with rasterio.open(outData, "w", **meta) as dst:
-            for i in range(nGS):
-                dst.set_band_description(i + 1, 'DOY ' + str(doy[i]))
     except AttributeError:
         print('ERROR in parallel processin...')
 
@@ -207,14 +200,6 @@ def PhenoLSP(inData, outData, nGS=46, min_sep=23, n_jobs=4, chuckSize=256):
     # apply PhenoShape with parallel processing
     try:
         _parallel_process(inData, outData, do_work, nval, n_jobs, chuckSize, bandNames)
-        # read metadata
-        with rasterio.open(outData) as dst:
-            meta = dst.profile
-        # save band names in metadata
-        with rasterio.open(outData, "w", **meta) as dst:
-            # save band description to metadata
-            for i in range(nval):
-                dst.set_band_description(i + 1, outnames[i])
     except AttributeError:
         print('ERROR in parallel processin...')
 
@@ -470,35 +455,63 @@ def _LSP(y, x, min_sep):
                 pass
 
             # Get LSP metrics
-            SOS = x[peak_min[0]]  # start of season
-            POS = x[peak_max]  # peak of season
-            EOS = x[peak_min[1]]  # end of season
-            vSOS = y[peak_min[0]]  # value at start of season
-            vPOS = y[peak_max]  # value at peak of season
-            vEOS = y[peak_min[1]]  # value at end of season
-            LOS = EOS - SOS  # length of season
-            AOS = y[peak_max] - np.min(y[peak_min])  # amplitude of season
-            green = x[(x > SOS) & (x < EOS)]  # get intergral of green season
-            if vPOS < vSOS or vPOS < vEOS:
-                IOS = np.nan
-            else:
+            try:
+                SOS = x[peak_min[0]]  # start of season
+            except ValueError:
+                SOS = np.nan
+            try:
+                POS = x[peak_max]  # peak of season
+            except ValueError:
+                POS = np.nan
+            try:
+                EOS = x[peak_min[1]]  # end of season
+            except ValueError:
+                EOS = np.nan
+            try:
+                vSOS = y[peak_min[0]]  # value at start of season
+            except ValueError:
+                vSOS = np.nan
+            try:
+                vPOS = y[peak_max]  # value at peak of season
+            except ValueError:
+                vPOS = np.nan
+            try:
+                vEOS = y[peak_min[1]]  # value at end of season
+            except ValueError:
+                vEOS = np.nan
+            try:
+                LOS = EOS - SOS  # length of season
+            except ValueError:
+                LOS = np.nan
+            try:
+                AOS = y[peak_max] - np.min(y[peak_min])  # amplitude of season
+            except ValueError:
+                AOS = np.nan
+            green = x[(x > SOS) & (x < EOS)]  # doy of growing season
+            try:
+                # get intergral of green season
                 id = []
                 for i in range(len(green)):
                     id.append((x == green[i]).nonzero()[0])
                 id = np.array([item for sublist in id for item in sublist])
-                IOS = trapz(y[id], x[id])  # integral of season
+                IOS = trapz(y[id], x[id])
+            except ValueError:
+                IOS = np.nan
             # rate of greening [slope SOS-POS]
-            if vPOS is np.nan or vSOS is np.nan or EOS is np.nan or POS is np.nan:
-                ROG = np.nan
-            else:
+            try:
                 ROG = (vPOS - vSOS)/(POS - SOS)
-            # rate of senescence [slope POS-EOS]
-            if vEOS is np.nan or vPOS is np.nan or EOS is np.nan or POS is np.nan:
+            except ValueError:
                 ROG = np.nan
-            else:
+            # rate of senescence [slope POS-EOS]
+            try:
                 ROS = (vEOS - vPOS)/(EOS - POS)
-            SW = skew(y)
-
+            except ValueError:
+                ROS = np.nan
+            # skewness of growing season
+            try:
+                SW = skew(y[green])
+            except ValueError:
+                SW = np.nan
             return np.array((SOS, POS, EOS, vSOS, vPOS, vEOS, LOS, AOS, IOS, ROG, ROS, SW))
         except IndexError:
             return np.repeat(np.nan, num)
