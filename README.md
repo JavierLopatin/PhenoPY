@@ -1,3 +1,4 @@
+# PhenoPY
 <h1 align="center">
 <a href='https://github.com/JavierLopatin/PhenoPY'><img src='logo.svg' align="right" height="239" /></a>
 
@@ -15,5 +16,4 @@
 </p>
 
 
-# PhenoPY
-Phenological analysis of Remote Sensing data with Python
+
