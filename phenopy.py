@@ -488,6 +488,10 @@ def _LSP(y, x, min_sep):
             except ValueError:
                 AOS = np.nan
             green = x[(x > SOS) & (x < EOS)]  # doy of growing season
+            id = []
+            for i in range(len(green)):
+                id.append((x == green[i]).nonzero()[0])
+            id = np.array([item for sublist in id for item in sublist])
             try:
                 # get intergral of green season
                 id = []
@@ -509,7 +513,7 @@ def _LSP(y, x, min_sep):
                 ROS = np.nan
             # skewness of growing season
             try:
-                SW = skew(y[green])
+                SW = skew(y[id])
             except ValueError:
                 SW = np.nan
             return np.array((SOS, POS, EOS, vSOS, vPOS, vEOS, LOS, AOS, IOS, ROG, ROS, SW))
