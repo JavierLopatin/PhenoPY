@@ -155,9 +155,10 @@ def PhenoShape(inData, outData, dates=None, nan_replace=None, rollWindow=None,
 
     # apply PhenoShape with parallel processing
     try:
+        print('Processing PhenoShape of ', inData)
         _parallel_process(inData, outData, do_work, nGS, n_jobs, chuckSize, bandNames)
     except AttributeError:
-        print('ERROR in parallel processin...')
+        print('ERROR in parallel processing...')
 
 
 # ---------------------------------------------------------------------------#
@@ -199,9 +200,10 @@ def PhenoLSP(inData, outData, nGS=46, min_sep=23, n_jobs=4, chuckSize=256):
     do_work = partial(_cal_LSP, min_sep=min_sep, nGS=nGS)
     # apply PhenoShape with parallel processing
     try:
+        print('Processing LSP of ', inData)
         _parallel_process(inData, outData, do_work, nval, n_jobs, chuckSize, bandNames)
     except AttributeError:
-        print('ERROR in parallel processin...')
+        print('ERROR in parallel processing...')
 
 
 
@@ -519,7 +521,8 @@ def _LSP(y, x, min_sep):
             return np.array((SOS, POS, EOS, vSOS, vPOS, vEOS, LOS, AOS, IOS, ROG, ROS, SW))
         except IndexError:
             return np.repeat(np.nan, num)
-
+        except ValueError:
+            return np.repeat(np.nan, num)
 # ---------------------------------------------------------------------------#
 
 def _cal_LSP(dstack, min_sep, nGS):
