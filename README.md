@@ -1,5 +1,5 @@
 <h1 align="center">
-<a href='https://github.com/JavierLopatin/PhenoPY'><img src='logo.svg' align="right" height="139" /></a>
+<a href='https://github.com/JavierLopatin/PhenoPY'><img src='logo.svg' align="right" height="239" /></a>
 
 <h4 align="center">Python bindings for Phenological analysis of Remote Sensing data </h4>
 
