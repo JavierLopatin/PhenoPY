@@ -95,17 +95,25 @@ def PhenoPlot(X, Y, inData, dates, saveFigure=None, ylim=None, rollWindow=None,
 
     elif type == 2:
         # detect peaks
-        peak_max = _detect_peaks(phen, nGS / 2)
-        peak_min = _detect_peaks(phen, nGS / 2, valley=True)
-        if len(peak_min) == 0:
+        peak_max = _detect_peaks(phen, nGS/2)
+        peak_min = _detect_peaks(phen, nGS/2, valley=True)
+        if len(peak_max) == 0:
+            peak_max = x[np.where(phen == np.max(y))[0]]
+        elif len(peak_max) > 1:
+            peak_max = peak_max[0]
+        else:
+            pass
+        if len(peak_min) == 0 or len(peak_min) == 1:
             # Find the location of where the values change according to the neightbors
             # This is in case the interpolation creates a straoght line when no values
             # are found at the extreams
-            start = [i for i in range(1, len(phen))
-                     if phen[i] != phen[i - 1]][0]
-            end = [i for i in range(1, len(phen))
-                   if phen[i] != phen[i - 1]][-1]
+            start = [i for i in range(1, len(phen)) if y[i] != y[i - 1]][0]
+            end = [i for i in range(1, len(phen)) if y[i] != y[i - 1]][-1]
             peak_min = np.array([start, end])
+        elif len(peak_min) > 2:
+            peak_min = np.array([peak_min[0], peak_min[-1]])
+        else:
+            pass
 
         plt.plot(xnew, phen, '-', color='black')
         plt.plot(xnew[peak_min[0]], phen[peak_min[0]], 'X', markersize=15,
@@ -190,7 +198,7 @@ def PhenoLSP(inData, outData, nGS=46, min_sep=23, n_jobs=4, chuckSize=256):
                 'vPOS - Values of peak of season',
                 'vEOS - Values of end of season',
                 'LOS - Length of season',
-                'AOS - Amplitude od season',
+                'AOS - Amplitude of season',
                 'IOS - Integral of season',
                 'ROG - Rate of greening',
                 'ROS - Rate of senescence',
