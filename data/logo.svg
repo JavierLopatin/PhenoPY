@@ -555,9 +555,9 @@
      borderopacity="1.0"
      inkscape:pageopacity="0.0"
      inkscape:pageshadow="2"
-     inkscape:zoom="0.98994949"
-     inkscape:cx="175.07742"
-     inkscape:cy="270.41271"
+     inkscape:zoom="1.4"
+     inkscape:cx="220.92044"
+     inkscape:cy="357.96067"
      inkscape:document-units="mm"
      inkscape:current-layer="g3353"
      showgrid="false"
@@ -578,7 +578,7 @@
         <dc:format>image/svg+xml</dc:format>
         <dc:type
            rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
-        <dc:title></dc:title>
+        <dc:title />
       </cc:Work>
     </rdf:RDF>
   </metadata>
@@ -1579,28 +1579,6 @@
                  style="white-space:pre;stroke-width:1.43503273;stroke-linecap:butt;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none" />
             </g>
           </g>
-          <ellipse
-             style="white-space:pre;opacity:1;vector-effect:none;fill:#ffffff;fill-opacity:0.99647887;stroke:none;stroke-width:5.03911114;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
-             id="path1236"
-             cx="404.84851"
-             cy="87.092476"
-             rx="13.839642"
-             ry="6.648685"
-             transform="matrix(0.97956955,0.20110567,-0.1602888,0.98707016,0,0)" />
-          <ellipse
-             style="white-space:pre;opacity:1;vector-effect:none;fill:#000000;fill-opacity:0.99647887;stroke:none;stroke-width:5.03694105;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
-             id="path1238"
-             cx="385.1611"
-             cy="172.07416"
-             rx="2.0004325"
-             ry="1.8021584" />
-          <ellipse
-             style="white-space:pre;opacity:1;vector-effect:none;fill:#000000;fill-opacity:0.99647887;stroke:none;stroke-width:5.03694105;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
-             id="path1238-6"
-             cx="386.23239"
-             cy="165.6133"
-             rx="2.0004325"
-             ry="1.8021584" />
           <path
              sodipodi:type="star"
              style="white-space:pre;opacity:1;vector-effect:none;fill:none;fill-opacity:0.99647887;stroke:#666666;stroke-width:6.75196648;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:0.9929578"
@@ -1617,16 +1595,95 @@
              inkscape:randomized="0"
              d="m 142.14286,140.14049 -94.059972,52.91665 -92.857143,-55 1.202825,-107.916644 94.059969,-52.916645 92.857141,55 z"
              transform="matrix(1.8516227,-0.01918964,0.01942707,1.8782532,137.5324,3.2077819)" />
+          <ellipse
+             style="white-space:pre;opacity:1;vector-effect:none;fill:#ffffff;fill-opacity:0.99647887;stroke:none;stroke-width:5.03911114;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+             id="path1236"
+             cx="404.79535"
+             cy="87.064438"
+             rx="16.502619"
+             ry="7.9280028"
+             transform="matrix(0.97956955,0.20110568,-0.1602888,0.98707016,0,0)" />
           <path
-             style="white-space:pre;fill:none;stroke:#ffffff;stroke-width:1.25923526;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
-             d="m 393.20337,170.26394 c 0,0 0,0 6.18145,1.30473 2.01844,2.65156 2.01844,2.65156 2.01844,2.65156"
+             style="white-space:pre;fill:none;stroke:#ffffff;stroke-width:2.01477644;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+             d="m 397.19967,170.26394 c 0,0 0,0 6.18145,1.30473 2.01844,2.65156 2.01844,2.65156 2.01844,2.65156"
              id="path1272"
              inkscape:connector-curvature="0" />
           <path
-             style="white-space:pre;fill:none;stroke:#ffffff;stroke-width:1.25923526;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
-             d="m 399.38482,171.56867 c 3.61636,-0.79967 3.61636,-0.79967 3.61636,-0.79967"
+             style="white-space:pre;fill:none;stroke:#ffffff;stroke-width:2.01477644;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+             d="m 403.38112,171.56867 c 3.61636,-0.79967 3.61636,-0.79967 3.61636,-0.79967"
              id="path1274"
              inkscape:connector-curvature="0" />
+          <ellipse
+             style="white-space:pre;opacity:1;vector-effect:none;fill:#ffffff;fill-opacity:0.99647887;stroke:#6600ff;stroke-width:2.51847076;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:0.9929578"
+             id="path1086"
+             cx="146.65126"
+             cy="151.3521"
+             rx="17.176788"
+             ry="17.260977" />
+          <text
+             xml:space="preserve"
+             style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:15.99228764px;line-height:1.25;font-family:Arial;-inkscape-font-specification:Arial;letter-spacing:0px;word-spacing:0px;white-space:pre;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1.67817104;stroke-linecap:butt;stroke-linejoin:round"
+             x="129.38451"
+             y="155.843"
+             id="text1090"
+             transform="scale(0.99955459,1.0004456)"><tspan
+               sodipodi:role="line"
+               id="tspan1088"
+               style="font-size:15.99228764px;white-space:pre;stroke-width:1.67817104;stroke-linecap:butt;stroke-linejoin:round;-inkscape-font-specification:'Arial Bold';font-family:Arial;font-weight:bold;font-style:normal;font-stretch:normal;font-variant:normal"
+               x="129.38451"
+               y="155.843">SOS</tspan></text>
+          <ellipse
+             style="white-space:pre;opacity:1;vector-effect:none;fill:#ffffff;fill-opacity:0.99647887;stroke:#6600ff;stroke-width:2.51847076;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:0.9929578"
+             id="path1086-3"
+             cx="235.64862"
+             cy="17.439871"
+             rx="17.176788"
+             ry="17.260977" />
+          <text
+             xml:space="preserve"
+             style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:15.99228764px;line-height:1.25;font-family:Arial;-inkscape-font-specification:Arial;letter-spacing:0px;word-spacing:0px;white-space:pre;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1.67817104;stroke-linecap:butt;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none"
+             x="218.42152"
+             y="21.990414"
+             id="text1090-6"
+             transform="scale(0.99955459,1.0004456)"><tspan
+               sodipodi:role="line"
+               id="tspan1088-7"
+               style="font-size:15.99228764px;white-space:pre;stroke-width:1.67817104;stroke-linecap:butt;stroke-linejoin:round;-inkscape-font-specification:'Arial Bold';font-family:Arial;font-weight:bold;font-style:normal;font-stretch:normal;font-variant:normal"
+               x="218.42152"
+               y="21.990414">POS</tspan></text>
+          <ellipse
+             style="white-space:pre;opacity:1;vector-effect:none;fill:#ffffff;fill-opacity:0.99647887;stroke:#6600ff;stroke-width:2.51847076;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:0.9929578"
+             id="path1086-5"
+             cx="349.35263"
+             cy="153.62537"
+             rx="17.176788"
+             ry="17.260977" />
+          <text
+             xml:space="preserve"
+             style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:15.99228764px;line-height:1.25;font-family:Arial;-inkscape-font-specification:Arial;letter-spacing:0px;word-spacing:0px;white-space:pre;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1.67817104;stroke-linecap:butt;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none"
+             x="332.17621"
+             y="158.11525"
+             id="text1090-3"
+             transform="scale(0.99955459,1.0004456)"><tspan
+               sodipodi:role="line"
+               id="tspan1088-5"
+               style="font-size:15.99228764px;white-space:pre;stroke-width:1.67817104;stroke-linecap:butt;stroke-linejoin:round;-inkscape-font-specification:'Arial Bold';font-family:Arial;font-weight:bold;font-style:normal;font-stretch:normal;font-variant:normal"
+               x="332.17621"
+               y="158.11525">EOS</tspan></text>
+          <ellipse
+             style="white-space:pre;opacity:1;vector-effect:none;fill:#000000;fill-opacity:0.99647887;stroke:none;stroke-width:5.03694105;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+             id="path1238"
+             cx="385.95746"
+             cy="171.35672"
+             rx="2.7967994"
+             ry="2.5195928" />
+          <ellipse
+             style="white-space:pre;opacity:1;vector-effect:none;fill:#000000;fill-opacity:0.99647887;stroke:none;stroke-width:5.03694105;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+             id="path1238-6"
+             cx="387.02875"
+             cy="164.89586"
+             rx="2.7967994"
+             ry="2.5195928" />
         </g>
       </g>
     </g>
