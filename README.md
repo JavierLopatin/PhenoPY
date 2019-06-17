@@ -29,7 +29,6 @@
 
 ### Documentation comming soon...
 
-
 ### Exampe:
 
 This example shows the phenology of wetland vegetation in the San Francisco delta, California, USA, using three consecutive years of Sentinel-2 data. With a total of ~120 observations per pixel, a tipical temporal figure looks like:
@@ -65,7 +64,7 @@ phen.PhenoPlot(X=X, Y=Y, inData=inData, dates=dates, ylim=None, type=1,
 
 ![alt text](data/figure2.svg)
 
-This is only for visualiyation. A raster of fitted lines per pixel can be achieve:
+This is only for visualization. A raster of fitted lines per pixel can be achieve:
 
 ``` python
 
@@ -73,7 +72,7 @@ phen.PhenoShape(inData=inData, outData=outData, dates=dates,
     nan_replace=-32767, nGS=46, chuckSize=256, n_jobs=4)
 
 ```
-where `nan_replace` is the NaN value (default None), `nGS` is the munber of interpolation values to use (here we obtained one avarage value per week, hence = 46), `chuckSize` is the size of the chunck that rasterio will open at the time, and `n_jobs` is the number of parallel process to use. We used rasterio to open gib images in smaller sizes and therefore keep the manory usage low.
+where `nan_replace` is the NaN value (default None), `nGS` is the munber of interpolation values to use (here we obtained one avarage value per week, hence = 46), `chuckSize` is the size of the chunck that rasterio will open at the time, and `n_jobs` is the number of parallel process to use. We used rasterio to open big images in small-sized chuncks and therefore keep the memory usage low.
 
 Meanwhile, a raster of Land Surface Phenology (LSP) metrics can be obtained as:
 
