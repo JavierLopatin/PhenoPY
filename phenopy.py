@@ -14,34 +14,55 @@ import numpy as np
 import matplotlib.pyplot as plt
 import xarray as xr
 from scipy.integrate import trapz
+from scipy.interpolate import Rbf, interp1d
 from scipy.stats import skew
 from tqdm import tqdm
 import concurrent.futures
 from functools import partial
+import sys
 
 # suppress numpy warnings of zero division
 np.seterr(divide='ignore', invalid='ignore')
 
 # ---------------------------------------------------------------------------#
-def PhenoPlot(X, Y, inData, dates, saveFigure=None, ylim=None, rollWindow=None,
-    type=1, nGS=46, ylab='NDVI'):
+def PhenoPlot(X, Y, inData, dates, type='linear', saveFigure=None, ylim=None,
+    rollWindow=None, plotType=1, nGS=46, ylab='NDVI'):
     """
     Plot the PhenoShape curve along with the yearly data
 
     Parameters
     ----------
-    - X: X coordinates
-    - Y: Y coordinates
-    - inData: Absolute path to the original timeseries data
-    - dates: Dates of the original timeseries data [dtype: datetime64[ns]]
-    - saveFigure: Absolute path with extention to save figure on disk
-    - ylim: Limits of the Y axis [default the y min() and max() values]
-    - type: Type of plot, where 1 = plot with accumulated years and 2 = plot with
+    - X: Float
+            X coordinates
+    - Y: Float
+            Y coordinates
+    - inData: String
+            Absolute path to the original timeseries data
+    - dates: String
+            Dates of the original timeseries data [dtype: datetime64[ns]]
+    - type = String or Integer
+            Interpolation type. Must be a string of ‘linear’, ‘nearest’,
+            ‘zero’, ‘slinear’, ‘quadratic’, ‘cubic’, ‘RBF‘, ‘previous’,
+            ‘next’, where ‘zero’, ‘slinear’, ‘quadratic’ and ‘cubic’ refer
+            to a spline interpolation of zeroth, first, second or third order;
+            ‘previous’ and ‘next’ simply return the previous or next value"
+            of the point) or as an integer specifying the order of the"
+            spline interpolator to use. RBF uses cubic interpolation.
+            Default is ‘linear’.
+    - saveFigure: String
+            Absolute path with extention to save figure on disk
+    - ylim: List of Integers or Float
+            Limits of the Y axis [default the y min() and max() values]
+    - plotType: Type of plot, where 1 = plot with accumulated years and 2 = plot with
             start of the season (SOS), peak of the season (POS) and end of
             season (EOS) [default 1]
-    - rollWindow: integer with value of avarage smoothing of linear trend [default None]
-    - nGS: Number of observations to predict the PhenoShape [default 46: one per week]
-    - ylab: Label of the Y axis [default "NDVI"]
+    - rollWindow: Integers
+            Value of avarage smoothing of linear trend [default None]
+    - nGS: Integer
+            Number of observations to predict the PhenoShape
+            default is 46; one per week
+    - ylab: string
+            Label of the Y axis [default "NDVI"]
 
     """
     # get spatial point
@@ -77,23 +98,26 @@ def PhenoPlot(X, Y, inData, dates, saveFigure=None, ylim=None, rollWindow=None,
     xarray['dim_0'] = xarray['doy']
     # rolling average using moving window
     if rollWindow is not None:
+        first = xarray.values[0]
+        last = xarray.values[-1:]
         xarray = xarray.rolling(dim_0=rollWindow, center=True).mean()
-
+        xarray.values[0] = first
+        xarray.values[-1:] = last
     # predict linear interpolation
     # get phenology shape accross the time axis
     y = xarray.values
     x = xarray.doy.values
-    phen = _getPheno(y, x, nGS)
-    xnew = np.linspace(1, 365, nGS, dtype='int16')
+    phen = _getPheno(y, x, nGS, type)
+    xnew = np.linspace(np.min(x), np.max(x), nGS, dtype='int16')
 
     # plot
-    if type == 1:
+    if plotType == 1:
         for name, group in groups:
             plt.plot(group.doy, group.VI, marker='o',
                      linestyle='', ms=10, label=name)
         plt.plot(xnew, phen, '-', color='black')
 
-    elif type == 2:
+    elif plotType == 2:
         # detect peaks
         peak_max = _detect_peaks(phen, nGS/2)
         peak_min = _detect_peaks(phen, nGS/2, valley=True)
@@ -133,7 +157,7 @@ def PhenoPlot(X, Y, inData, dates, saveFigure=None, ylim=None, rollWindow=None,
 
 # ---------------------------------------------------------------------------#
 
-def PhenoShape(inData, outData, dates=None, nan_replace=None, rollWindow=None,
+def PhenoShape(inData, outData, type='linear', dates=None, nan_replace=None, rollWindow=None,
     nGS=46, chuckSize=256, n_jobs=4):
     """
     Process phenological shape of remote sensing data by
@@ -158,7 +182,7 @@ def PhenoShape(inData, outData, dates=None, nan_replace=None, rollWindow=None,
         bandNames.append('DOY - ' + str(doy[i]))
 
     # call _getPheno2 function to loal
-    do_work = partial(_getPheno2, dates=dates, nGS=nGS, nan_replace=nan_replace,
+    do_work = partial(_getPheno2, dates=dates, nGS=nGS, type=type, nan_replace=nan_replace,
         rollWindow=rollWindow)
 
     # apply PhenoShape with parallel processing
@@ -188,6 +212,7 @@ def PhenoLSP(inData, outData, nGS=46, min_sep=23, n_jobs=4, chuckSize=256):
     IOS = Integral of season (SOS-EOS)
     ROG = Rate of greening [slope SOS-POS]
     ROS = Rate of senescence [slope POS-EOS]
+    SW = Skewness of greening period
     """
     # set variables
     nval = 12  # number of output variables
@@ -202,7 +227,7 @@ def PhenoLSP(inData, outData, nGS=46, min_sep=23, n_jobs=4, chuckSize=256):
                 'IOS - Integral of season',
                 'ROG - Rate of greening',
                 'ROS - Rate of senescence',
-                'SW - Skewness of PhenoShape']
+                'SW - Skewness of greening period']
 
     # call _getPheno2 function to loal
     do_work = partial(_cal_LSP, min_sep=min_sep, nGS=nGS)
@@ -261,7 +286,7 @@ def _parallel_process(inData, outData, do_work, count,  n_jobs, chuckSize, bandN
 
 # ---------------------------------------------------------------------------#
 
-def _getPheno(y, x, nGS):
+def _getPheno(y, x, nGS, type):
     """
     Apply linear interpolation in the 'time' axis
     x: DOY values
@@ -271,20 +296,36 @@ def _getPheno(y, x, nGS):
     if np.sum(inds) == len(y):  # check is all values are NaN
         return y[0:nGS]
     else:
-        if inds.any():  # if inds have at least one True
-            x = x[~inds]
-            y = y[~inds]
-            xnew = np.linspace(1, 365, nGS, dtype='int16')
-            ynew = np.interp(xnew, x, y)
-        else:
-            xnew = np.linspace(1, 365, nGS, dtype='int16')
-            ynew = np.interp(xnew, x, y)
+        try:
+            if inds.any():  # if inds have at least one True
+                x = x[~inds]
+                y = y[~inds]
+                _replaceElements(x, len(x))
+                xnew = np.linspace(np.min(x), np.max(x), nGS, dtype='int16')
+                if type == 'linear':
+                    ynew = np.interp(xnew, x, y)
+                elif type == 'RBF':
+                    f = Rbf(x, y, funciton='cubic')
+                    ynew = f(xnew)
+                else:
+                    f = interp1d(x, y, kind=type)
+                    ynew = f(xnew)
+            else:
+                xnew = np.linspace(1, 365, nGS, dtype='int16')
+                ynew = np.interp(xnew, x, y)
+        except NotImplementedError:
+            print("ERROR: Interpolation type must be ‘linear’, ‘nearest’,"
+                  "‘zero’, ‘slinear’, ‘quadratic’, ‘cubic’, ‘RBF‘, ‘previous’,"
+                  "‘next’, where ‘zero’, ‘slinear’, ‘quadratic’ and ‘cubic’ refer"
+                  "to a spline interpolation of zeroth, first, second or third order;" "‘previous’ and ‘next’ simply return the previous or next value"
+                  "of the point) or as an integer specifying the order of the"
+                  "spline interpolator to use. Default is ‘linear’.")
 
     return ynew
 
 # ---------------------------------------------------------------------------#
 
-def _getPheno2(dstack, dates, nGS, nan_replace, rollWindow):
+def _getPheno2(dstack, dates, nGS, type, nan_replace, rollWindow):
     """
     Obtain shape of phenological responses
 
@@ -313,7 +354,7 @@ def _getPheno2(dstack, dates, nGS, nan_replace, rollWindow):
     y = xarray.values
 
     # get phenology shape accross the time axis
-    return np.apply_along_axis(_getPheno, 0, y, x, nGS)
+    return np.apply_along_axis(_getPheno, 0, y, x, nGS, type)
 
 # ---------------------------------------------------------------------------#
 
@@ -557,3 +598,22 @@ def _cal_LSP(dstack, min_sep, nGS):
     x = np.linspace(1, 365, nGS, dtype='int16')
     # estimate LSP metrics along the 0 axis
     return np.apply_along_axis(_LSP, 0, dstack, x, nGS)
+
+def _replaceElements(arr, n):
+    '''
+    Replace monotonic vector values to avoid
+    interpolation errors
+    '''
+    s = []
+    for i in range (n):
+        # check whether the element
+        # is repeated or not
+        if arr[i] not in s:
+            s.append(arr[i])
+        else:
+            # find the next greatest element
+            for j in range(arr[i] + 1, sys.maxsize):
+                if j not in s:
+                    arr[i] = j
+                    s.append(j)
+                    break
