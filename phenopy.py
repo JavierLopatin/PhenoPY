@@ -20,13 +20,16 @@ from tqdm import tqdm
 import concurrent.futures
 from functools import partial
 import sys
+from kneed import KneeLocator
 
 # suppress numpy warnings of zero division
 np.seterr(divide='ignore', invalid='ignore')
 
-# ---------------------------------------------------------------------------#
+# --------------------------------------------------------------------------- #
+# ------------------------------- FUNCTIONS --------------------------------- #
+# --------------------------------------------------------------------------- #
 def PhenoPlot(X, Y, inData, dates, type='linear', saveFigure=None, ylim=None,
-    rollWindow=None, plotType=1, nGS=46, ylab='NDVI'):
+              rollWindow=None, plotType=1, nGS=46, n_phen=15, ylab='NDVI'):
     """
     Plot the PhenoShape curve along with the yearly data
 
@@ -55,7 +58,8 @@ def PhenoPlot(X, Y, inData, dates, type='linear', saveFigure=None, ylim=None,
             Limits of the Y axis [default the y min() and max() values]
     - plotType: Type of plot, where 1 = plot with accumulated years and 2 = plot with
             start of the season (SOS), peak of the season (POS) and end of
-            season (EOS) [default 1]
+            season (EOS)
+            default is 1
     - rollWindow: Integers
             Value of avarage smoothing of linear trend [default None]
     - nGS: Integer
@@ -96,13 +100,13 @@ def PhenoPlot(X, Y, inData, dates, type='linear', saveFigure=None, ylim=None,
     xarray = xarray.sortby('doy')
     # rearrange time dimension for smoothing
     xarray['dim_0'] = xarray['doy']
+    # fill NaN values if any
+    xarray.values = _fillNaN(xarray.values)
+
     # rolling average using moving window
     if rollWindow is not None:
-        first = xarray.values[0]
-        last = xarray.values[-1:]
         xarray = xarray.rolling(dim_0=rollWindow, center=True).mean()
-        xarray.values[0] = first
-        xarray.values[-1:] = last
+        xarray.values = _fillNaN(xarray.values)
     # predict linear interpolation
     # get phenology shape accross the time axis
     y = xarray.values
@@ -118,33 +122,18 @@ def PhenoPlot(X, Y, inData, dates, type='linear', saveFigure=None, ylim=None,
         plt.plot(xnew, phen, '-', color='black')
 
     elif plotType == 2:
-        # detect peaks
-        peak_max = _detect_peaks(phen, nGS/2)
-        peak_min = _detect_peaks(phen, nGS/2, valley=True)
-        if len(peak_max) == 0:
-            peak_max = x[np.where(phen == np.max(y))[0]]
-        elif len(peak_max) > 1:
-            peak_max = peak_max[0]
-        else:
-            pass
-        if len(peak_min) == 0 or len(peak_min) == 1:
-            # Find the location of where the values change according to the neightbors
-            # This is in case the interpolation creates a straoght line when no values
-            # are found at the extreams
-            start = [i for i in range(1, len(phen)) if y[i] != y[i - 1]][0]
-            end = [i for i in range(1, len(phen)) if y[i] != y[i - 1]][-1]
-            peak_min = np.array([start, end])
-        elif len(peak_min) > 2:
-            peak_min = np.array([peak_min[0], peak_min[-1]])
-        else:
-            pass
+        # get position of SOS, POS, and EOS
+        metrics = _getLSPmetrics(phen, xnew, n_phen, len(xnew))
+        isos = np.where(xnew == metrics[0])[0][0]
+        ipos = np.where(xnew == metrics[1])[0][0]
+        ieos = np.where(xnew == metrics[2])[0][0]
 
         plt.plot(xnew, phen, '-', color='black')
-        plt.plot(xnew[peak_min[0]], phen[peak_min[0]], 'X', markersize=15,
+        plt.plot(xnew[isos], phen[isos], 'X', markersize=15,
                  label='SOS')
-        plt.plot(xnew[peak_max], phen[peak_max], 'X', markersize=15,
+        plt.plot(xnew[ipos], phen[ipos], 'X', markersize=15,
                  label='POS')
-        plt.plot(xnew[peak_min[1]], phen[peak_min[1]], 'X', markersize=15,
+        plt.plot(xnew[ieos], phen[ieos], 'X', markersize=15,
                  label='EOS')
     plt.legend()
     if ylim is not None:
@@ -157,8 +146,9 @@ def PhenoPlot(X, Y, inData, dates, type='linear', saveFigure=None, ylim=None,
 
 # ---------------------------------------------------------------------------#
 
-def PhenoShape(inData, outData, type='linear', dates=None, nan_replace=None, rollWindow=None,
-    nGS=46, chuckSize=256, n_jobs=4):
+def PhenoShape(inData, outData, interpolType='linear', dates=None,
+               nan_replace=None, rollWindow=None, nGS=46, n_jobs=4,
+               chuckSize=256):
     """
     Process phenological shape of remote sensing data by
     folding data to day-of-the-year. Process is done in a block-by-block way
@@ -166,13 +156,34 @@ def PhenoShape(inData, outData, type='linear', dates=None, nan_replace=None, rol
 
     Parameters
     ----------
-    - inData: Absolute path to the original timeseries data
-    - dates: Dates of the original timeseries data [dtype: datetime64[ns]]
-    - outData: Absolute path with extention to save raster on disk
-    - rollWindow: integer with value of avarage smoothing of linear trend [default None]
-    - nGS: Number of observations to predict the PhenoShape [default 46: one per week]
-    - chuckSize: Size of the raster chunks that would be load to memory each
-                time. Needs to be multiple of 16.
+    - inData: String
+        Absolute path to the original timeseries data
+    - outData: String
+        Absolute path with extention to save raster on disk
+    - interpolType: String or Integer
+        Type of interpolation to perform. Options include ‘linear’, ‘nearest’,
+        ‘zero’, ‘slinear’, ‘quadratic’, ‘cubic’, ‘RBF‘, ‘previous’, ‘next’,
+        where ‘zero’, ‘slinear’, ‘quadratic’ and ‘cubic’ refer to a spline
+        interpolation of zeroth, first, second or third order; ‘previous’ and
+        ‘next’ simply return the previous or next value of the point.
+         Integer numbers specify the order of the spline interpolator to use.
+         Default is ‘linear’.
+    - dates: 1D pandas file
+        Dates of the original timeseries data [dtype: datetime64[ns]]
+    - nan_replace: Integer
+        Value of the NaN data if there are any
+    - rollWindow: Integer
+        Value of avarage smoothing of linear trend [default None]
+    - nGS: Integer
+        Number of observations to predict the PhenoShape
+        default is 46 [one per week]
+    - n_jobs: Integer
+        Number of parallel jorb to apply during modeling
+    - chuckSize: Integer
+        Size of raster chunks to be loaded during modeling
+        Number must be multiple of 16 [GDAL specifications]
+        default value is 256 [256 X 256 raster blocks]
+
     """
 
     # get names for output bands
@@ -182,59 +193,88 @@ def PhenoShape(inData, outData, type='linear', dates=None, nan_replace=None, rol
         bandNames.append('DOY - ' + str(doy[i]))
 
     # call _getPheno2 function to loal
-    do_work = partial(_getPheno2, dates=dates, nGS=nGS, type=type, nan_replace=nan_replace,
-        rollWindow=rollWindow)
+    do_work = partial(_getPheno2, dates=dates, nGS=nGS, type=interpolType,
+                      nan_replace=nan_replace, rollWindow=rollWindow)
 
     # apply PhenoShape with parallel processing
     try:
         print('Processing PhenoShape of ', inData)
-        _parallel_process(inData, outData, do_work, nGS, n_jobs, chuckSize, bandNames)
+        _parallel_process(inData, outData, do_work, nGS, n_jobs, chuckSize,
+                          bandNames)
     except AttributeError:
         print('ERROR in parallel processing...')
 
 
 # ---------------------------------------------------------------------------#
 
-def PhenoLSP(inData, outData, nGS=46, min_sep=23, n_jobs=4, chuckSize=256):
+def PhenoLSP(inData, outData, doy, nGS=46, n_phen=15, n_jobs=4, chuckSize=256):
     """
     Obtain land surfurface phenology metrics for a PhenoShape product
 
+    Parameters
+    ----------
+    - inData: String
+        Absolute path to PhenoShape raster data
+    - outData: String
+        Absolute path for output land surface phenology raster
+    - doy: 1D array
+        Numpy array of the days of the year of the time series
+    - nGS: Integer
+        Number of observations to predict the PhenoShape
+        default is 46; one per week
+    - n_phen: Integer
+        Window size where to estimate SOS and EOS
+    - n_jobs: Integer
+        Number of parallel jorb to apply during modeling
+    - chuckSize: Integer
+        Size of raster chunks to be loaded during modeling
+        Number must be multiple of 16 [GDAL specifications]
+        default value is 256 [256 X 256 raster blocks]
+
     outputs
     -------
-    SOS = DOY of start of season
-    POS = DOY of peak of season
-    EOS = DOY of end of season
-    vSOS = Value at start of season
-    vPOS = Value at peak of season
-    vEOS = Value at end of season
-    LOS = Length of season (DOY)
-    AOS = Amplitude of season (in value units)
-    IOS = Integral of season (SOS-EOS)
-    ROG = Rate of greening [slope SOS-POS]
-    ROS = Rate of senescence [slope POS-EOS]
-    SW = Skewness of greening period
+    Raster stack with the followingvariables:
+        - SOS: DOY of start of season
+        - POS: DOY of peak of season
+        - EOS: DOY of end of season
+        - vSOS: Value at start of season
+        - vPOS: Value at peak of season
+        - vEOS: Value at end of season
+        - LOS: Length of season (DOY)
+        - MGS: Mean growing season
+        - MSP: Mean senescence season
+        - MAU: Mean autum
+        - AOS: Amplitude of season (in value units)
+        - IOS: Integral of season (SOS-EOS)
+        - ROG: Rate of greening [slope SOS-POS]
+        - ROS: Rate of senescence [slope POS-EOS]
+        - SW: Skewness of growing season
     """
-    # set variables
-    nval = 12  # number of output variables
-    bandNames = ['SOS - DOY of Start of season',  # name of output bands
-                'POS - DOY of Peak of season',
-                'EOS - DOY of End of season',
-                'vSOS - Vaues of start os season',
-                'vPOS - Values of peak of season',
-                'vEOS - Values of end of season',
-                'LOS - Length of season',
-                'AOS - Amplitude of season',
-                'IOS - Integral of season',
-                'ROG - Rate of greening',
-                'ROS - Rate of senescence',
-                'SW - Skewness of greening period']
+
+    # name of output bands
+    bandNames = ['SOS - DOY of Start of season',
+                 'POS - DOY of Peak of season',
+                 'EOS - DOY of End of season',
+                 'vSOS - Vaues at start os season',
+                 'vPOS - Values at peak of season',
+                 'vEOS - Values at end of season',
+                 'LOS - Length of season',
+                 'MGS - Mean growing season',
+                 'MSP - Mean senescence season',
+                 'MAU - Mean autum',
+                 'AOS - Amplitude of season',
+                 'IOS - Integral of season [SOS-EOS]',
+                 'ROG - Rate of greening [slope SOS-POS]',
+                 'ROS - Rate of senescence [slope POS-EOS]',
+                 'SW - Skewness of growing season [SOS-EOS]']
 
     # call _getPheno2 function to loal
-    do_work = partial(_cal_LSP, min_sep=min_sep, nGS=nGS)
+    do_work = partial(_cal_LSP, nGS=nGS, doy=doy, n_phen=n_phen, num=len(bandNames))
     # apply PhenoShape with parallel processing
     try:
         print('Processing LSP of ', inData)
-        _parallel_process(inData, outData, do_work, nval, n_jobs, chuckSize, bandNames)
+        _parallel_process(inData, outData, do_work, len(bandNames), n_jobs,
+                          chuckSize, bandNames)
     except AttributeError:
         print('ERROR in parallel processing...')
 
@@ -358,93 +398,182 @@ def _getPheno2(dstack, dates, nGS, type, nan_replace, rollWindow):
 
 # ---------------------------------------------------------------------------#
 
-def _detect_peaks(spec, min_sep, valley=False):
+def _getLSPmetrics(phen, xnew, n_phen, num):
     """
-    Detects peaks and bottoms.
+    Obtain land surfurface phenology metrics
 
     Parameters
     ----------
-    - spec: 1D array
-        The specrum to analyze.
+    - phen: 1D array
+        PhenoShape data
+    - xnew: 1D array
+        DOY values for PhenoShape data
+    - n_phen: Integer
+        Window size where to estimate SOS and EOS
+    - num: Integer
+        Number of output variables
 
-    - valley: bool
-        Whether to search for peaks (positive) or valleys (negative).
-        Default: False
-
-    Returns
+    Outputs
     -------
-    1D array_like
-        Indeces of the peaks in `spec`.
+    - 2D array with the following variables:
 
-    Notes
-    -----
-    The detection of valleys instead of peaks is performed internally by simply
-    negating the data: `ind_valleys = detect_peaks(-x)`
-
-    The function can handle NaN's
-
-    See this IPython Notebook [1].
-
-    References
-        ----------
-    [1] http://nbviewer.ipython.org/github/demotu/BMC/blob/master/notebooks/DetectPeaks.ipynb
-
+        SOS = DOY of start of season
+        POS = DOY of peak of season
+        EOS = DOY of end of season
+        vSOS = Value at start of season
+        vPOS = Value at peak of season
+        vEOS = Value at end of season
+        LOS = Length of season (DOY)
+        MGS = Mean growing season
+        MSP = Mean senescence season
+        MAU = Mean autum
+        AOS = Amplitude of season (in value units)
+        IOS = Integral of season (SOS-EOS)
+        ROG = Rate of greening [slope SOS-POS]
+        ROS = Rate of senescence [slope POS-EOS]
+        SW = Skewness of growing season
     """
-    # set default values
-    thresh = 0.0
-    edge = 'rising'
-    kpsh = False
-    # can't do any work if there are less than 3 points to work with
-    if spec.size < 3:
-        return np.array([], dtype=int)
-    # if we are looking for valleys, then invert the spectra
-    if valley:
-        spec = -spec
-    # find indexes of all peaks
-    dx = spec[1:] - spec[:-1]
-    # handle NaN's
-    indnan = np.where(np.isnan(spec))[0]
-    if indnan.size:
-        spec[indnan] = np.inf
-        dx[np.where(np.isnan(dx))[0]] = np.inf
-    ine, ire, ife = np.array([[], [], []], dtype=int)
-    if not edge:
-        ine = np.where((np.hstack((dx, 0)) < 0) & (np.hstack((0, dx)) > 0))[0]
+    inds = np.isnan(phen)  # check if array has NaN values
+    if np.sum(inds) > 0:  # check is all values are NaN
+        return np.repeat(np.nan, num)
     else:
-        if edge.lower() in ['rising', 'both']:
-            ire = np.where((np.hstack((dx, 0)) <= 0) &
-                           (np.hstack((0, dx)) > 0))[0]
-        if edge.lower() in ['falling', 'both']:
-            ife = np.where((np.hstack((dx, 0)) < 0) &
-                           (np.hstack((0, dx)) >= 0))[0]
-    ind = np.unique(np.hstack((ine, ire, ife)))
-    # handle NaN's
-    if ind.size and indnan.size:
-        # NaN's and values close to NaN's cannot be peaks
-        ind = ind[np.invert(np.in1d(ind, np.unique(
-            np.hstack((indnan, indnan - 1, indnan + 1)))))]
-    # first and last values of x cannot be peaks
-    if ind.size and ind[0] == 0:
-        ind = ind[1:]
-    if ind.size and ind[-1] == spec.size - 1:
-        ind = ind[:-1]
-    # remove peaks < minimum peak height
-    if ind.size and thresh is not None:
-        ind = ind[spec[ind] >= thresh]
-    # detect small peaks closer than minimum peak distance
-    if ind.size and min_sep > 1:
-        ind = ind[np.argsort(spec[ind])][::-1]  # sort ind by peak height
-        idel = np.zeros(ind.size, dtype=bool)
-        for i in range(ind.size):
-            if not idel[i]:
-                # keep peaks with the same height if kpsh is True
-                idel = idel | (ind >= ind[i] - min_sep) & (ind <= ind[i] + min_sep) \
-                    & (spec[ind[i]] > spec[ind] if kpsh else True)
-                idel[i] = 0  # Keep current peak
-        # remove the small peaks and sort back the indexes by their occurrence
-        ind = np.sort(ind[~idel])
+        try:
+            # basic variables
+            peak = np.max(phen)
+            ipos = np.where(phen == peak)[0]
+            pos = xnew[ipos]
+            trough = np.min(phen)
+            ampl = peak - trough
 
-    return ind
+            # get position of seasonal peak and trough
+            ipos = np.where(phen == peak)[0]
+
+            # scale annual time series to 0-1
+            ratio = (phen - trough) / ampl
+
+            # select time where SOS and EOS are located (around trs value)
+            # KneeLocator looks for the inflection index in the curve
+            try:
+                knee = KneeLocator(xnew[0:n_phen], phen[0:n_phen], curve='convex',
+                                   direction='increasing')
+                sos = knee.knee
+                isos = np.where(xnew == knee.knee)[0]
+
+                knee = KneeLocator(xnew[-n_phen:], phen[-n_phen:], curve='convex',
+                                   direction='decreasing')
+                eos = knee.knee
+                ieos = np.where(xnew == knee.knee)[0]
+                if sos == None:
+                    isos = 0
+                    sos = xnew[isos]
+                if eos == None:
+                    ieos = len(xnew)-1
+                    eos = xnew[ieos]
+            except ValueError:
+                sos = np.nan
+                isos = np.nan
+                eos = np.nan
+                ieos = np.nan
+            except TypeError:
+                sos = np.nan
+                isos = np.nan
+                eos = np.nan
+                ieos = np.nan
+
+            # los: length of season
+            try:
+                los = eos - sos
+                if los < 0:
+                    los[los < 0] = len(phen) + (eos[los < 0] - sos[los < 0])
+            except ValueError:
+                los = np.nan
+            except TypeError:
+                los = np.nan
+
+            # get MGS, MSP, MAU
+            try:
+                mgs = np.mean(phen[ratio > 0.5])  # mean growing season
+                msp = mau = np.nan  # mean senescence season
+                if ~np.isnan(sos):
+                    id = np.arange((isos-10), (isos+10))
+                    id = id[(id > 0) & (id < len(phen))]
+                    msp = []
+                    for i in range(len(id)):
+                        msp.append(phen[id[i]])
+                msp = np.mean(msp)
+                if ~np.isnan(eos):
+                    id = np.arange((ieos-10), (ieos+10))
+                    id = id[(id > 0) & (id < len(phen))]
+                    mau = []
+                    for i in range(len(id)):
+                        mau.append(phen[id[i]])
+                    mau = np.mean(mau)
+
+            except ValueError:
+                mgs = np.nan
+                msp = np.nan
+                mau = np.nan
+            except TypeError:
+                mgs = np.nan
+                msp = np.nan
+                mau = np.nan
+
+            # doy of growing season
+            try:
+                green = xnew[(xnew > sos) & (xnew < eos)]
+                id = []
+                for i in range(len(green)):
+                    id.append((xnew == green[i]).nonzero()[0])
+                # index of growing season
+                id = np.array([item for sublist in id for item in sublist])
+            except ValueError:
+                id = np.nan
+            except TypeError:
+                id = np.nan
+
+            # get intergral of green season
+            try:
+                ios = trapz(phen[id], xnew[id])
+            except ValueError:
+                ios = np.nan
+            except TypeError:
+                ios = np.nan
+
+            # rate of greening [slope SOS-POS]
+            try:
+                rog = (peak - phen[isos])/(pos - sos)
+            except ValueError:
+                rog = np.nan
+            except TypeError:
+                rog = np.nan
+
+            # rate of senescence [slope POS-EOS]
+            try:
+                ros = (phen[ieos] - peak)/(eos - pos)
+            except ValueError:
+                ros = np.nan
+            except TypeError:
+                ros = np.nan
+
+            # skewness of growing season
+            try:
+                sw = skew(phen[id])
+            except ValueError:
+                sw = np.nan
+            except TypeError:
+                sw = np.nan
+
+            metrics = np.array((sos, pos, eos, phen[isos], peak, phen[ieos],
+                                los, mgs, msp, mau, ampl, ios, rog, ros, sw))
+
+            return metrics
+
+        except IndexError:
+            return np.repeat(np.nan, num)
+        except ValueError:
+            return np.repeat(np.nan, num)
+        except TypeError:
+            return np.repeat(np.nan, num)
 
 # ---------------------------------------------------------------------------#
 
@@ -574,7 +703,7 @@ def _LSP(y, x, min_sep):
             return np.repeat(np.nan, num)
 # ---------------------------------------------------------------------------#
 
-def _cal_LSP(dstack, min_sep, nGS):
+def _cal_LSP(dstack, nGS, doy, n_phen, num):
     """
     Process the _LSP funciton into an 3D arrays
 
@@ -582,12 +711,12 @@ def _cal_LSP(dstack, min_sep, nGS):
     ----------
     - dstack: 3D array
         PhenoShape data.
-
     - min_sep: integer
          Distance to consider betweem peaks and bottoms.
-
     - nGS: integer
         Number of DOY values
+    - num: Integer
+        Number of output variables
 
     Output
     ------
@@ -595,9 +724,12 @@ def _cal_LSP(dstack, min_sep, nGS):
         Stack with the LSP metrics descibes in _LSP
     """
     # prepare input data for _LSP
-    x = np.linspace(1, 365, nGS, dtype='int16')
+    xnew = np.linspace(np.min(doy), np.max(doy), nGS, dtype='int16')
+
     # estimate LSP metrics along the 0 axis
-    return np.apply_along_axis(_LSP, 0, dstack, x, nGS)
+    return np.apply_along_axis(_getLSPmetrics, 0, dstack, xnew, n_phen, num)
+
+# ---------------------------------------------------------------------------#
 
 def _replaceElements(arr, n):
     '''
@@ -617,3 +749,11 @@ def _replaceElements(arr, n):
                     arr[i] = j
                     s.append(j)
                     break
+
+# ---------------------------------------------------------------------------#
+
+def _fillNaN(x):
+    # Fill NaN data by linear interpolation
+    mask = np.isnan(x)
+    x[mask] = np.interp(np.flatnonzero(mask), np.flatnonzero(~mask), x[~mask])
+    return x
