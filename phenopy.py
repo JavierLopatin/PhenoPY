@@ -5,28 +5,30 @@
 #
 ###############################################################################
 
+# libraries included in Python 3.X
 from __future__ import division
-from rasterstats import point_query
-from shapely.geometry import Point
-import rasterio
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
-import xarray as xr
-from scipy.integrate import trapz
-from scipy.interpolate import Rbf, interp1d
-from scipy.stats import skew
-from tqdm import tqdm
 import concurrent.futures
 from functools import partial
 import sys
-from kneed import KneeLocator
 import warnings
-from scipy.stats import gaussian_kde
-    
-# suppress numpy warnings of zero division
-np.seterr(divide='ignore', invalid='ignore')
+
+# common dependencies
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.integrate import trapz
+from scipy.interpolate import Rbf, interp1d
+from scipy.stats import skew
+
+# speciel dependencies
+import xarray as xr                 # manipulate 3D time-series rasters
+from shapely.geometry import Point  # create geographical points
+import rasterio                     # manipulate GeoTIFF
+from rasterstats import point_query # extract raster values
+from tqdm import tqdm               # progress bar
+from kneed import KneeLocator       # find inflection point on a curve
+from KDEpy import FFTKDE            # perform fast 2D kernel density estimations
+
 
 # --------------------------------------------------------------------------- #
 # ------------------------------- FUNCTIONS --------------------------------- #
@@ -94,10 +96,10 @@ def PhenoPlot(X, Y, inData, dates, type='KDE', saveFigure=None, ylim=None,
     valuesTSSpd.columns = ['dates', 'doy', 'year', 'VI']
     valuesTSSpd = valuesTSSpd.sort_values('doy')
     valuesTSSpd.VI = _fillNaN(valuesTSSpd.VI.values)
-    
+
     # group values according to year
     groups = valuesTSSpd.groupby('year')
-    
+
     # Transform numpy array to xarray
     xarray = xr.DataArray(valuesTSSpd.VI)
     # DOY coordinates
@@ -110,18 +112,18 @@ def PhenoPlot(X, Y, inData, dates, type='KDE', saveFigure=None, ylim=None,
         xarray.values[0:2] = start
         xarray.values[-2:] = end
         xarray.values = _fillNaN(xarray.values)
-    
+
     # get phenological shape
     phen = _getPheno(xarray.values, valuesTSSpd.doy.values, nGS, type)
     # doy of the predicted phenological shape
-    xnew = np.linspace(np.min(valuesTSSpd.doy), np.max(valuesTSSpd.doy), nGS, 
+    xnew = np.linspace(np.min(valuesTSSpd.doy), np.max(valuesTSSpd.doy), nGS,
                        dtype='int16')
-    
+
     # plot
     if plotType == 1:
         rmse = _RMSE(valuesTSSpd.doy.values, valuesTSSpd.VI.values, xnew, phen)
         rmse = np.round(rmse, 2)
-        
+
         for name, group in groups:
             plt.plot(group.doy, group.VI, marker='o',
                      linestyle='', ms=10, label=name)
@@ -133,15 +135,15 @@ def PhenoPlot(X, Y, inData, dates, type='KDE', saveFigure=None, ylim=None,
         plt.ylabel(ylab, fontsize=fontsize)
         plt.xlabel('Day of the year', fontsize=fontsize)
 
-        
-    
+
+
     elif plotType == 2:
         # get position of SOS, POS, and EOS
         metrics = _getLSPmetrics(phen, xnew, nGS, len(xnew))
         isos = np.where(xnew == metrics[0])[0][0]
         ipos = np.where(xnew == metrics[1])[0][0]
         ieos = np.where(xnew == metrics[2])[0][0]
-    
+
         plt.plot(xnew, phen, '-', color='black')
         plt.plot(xnew[isos], phen[isos], 'X', markersize=15,
                  label='SOS')
@@ -149,20 +151,20 @@ def PhenoPlot(X, Y, inData, dates, type='KDE', saveFigure=None, ylim=None,
                  label='POS')
         plt.plot(xnew[ieos], phen[ieos], 'X', markersize=15,
                  label='EOS')
-        
+
         plt.legend(prop={'size': 12})
         if ylim is not None:
             plt.ylim(ylim[0], ylim[1])
         plt.ylabel(ylab, fontsize=fontsize)
-        plt.xlabel('Day of the year', fontsize=fontsize)        
-        
+        plt.xlabel('Day of the year', fontsize=fontsize)
+
     if saveFigure is not None:
         plt.savefig(saveFigure)
     plt.show()
 
 # ---------------------------------------------------------------------------#
 
-def PhenoShape(inData, outData, dates, interpolType='KDE', nan_replace=None, 
+def PhenoShape(inData, outData, dates, interpolType='KDE', nan_replace=None,
                rollWindow=None, nGS=46, n_jobs=4, chuckSize=256):
     """
     Process phenological shape of remote sensing data by
@@ -202,7 +204,7 @@ def PhenoShape(inData, outData, dates, interpolType='KDE', nan_replace=None,
     """
 
     # get names for output bands
-    doy = np.linspace(np.min(dates.dt.dayofyear), np.max(dates.dt.dayofyear), 
+    doy = np.linspace(np.min(dates.dt.dayofyear), np.max(dates.dt.dayofyear),
                       nGS, dtype='int16')
     bandNames = []
     for i in range(nGS):
@@ -214,7 +216,9 @@ def PhenoShape(inData, outData, dates, interpolType='KDE', nan_replace=None,
 
     # apply PhenoShape with parallel processing
     try:
-        _parallel_process(inData, outData, do_work, nGS, n_jobs, chuckSize,
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            _parallel_process(inData, outData, do_work, nGS, n_jobs, chuckSize,
                           bandNames)
     except AttributeError:
         print('ERROR in parallel processing...')
@@ -275,9 +279,10 @@ def PhenoLSP(inData, outData, doy, nGS=46, n_phen=10, n_jobs=4, chuckSize=256):
                  'vPOS - Values at peak of season',
                  'vEOS - Values at end of season',
                  'LOS - Length of season',
-                 'MGS - Mean growing season',
-                 'MSP - Mean senescence season',
-                 'MAU - Mean autum',
+                 'MSP - Mean spring (DOY)',
+                 'MAU - Mean autum (DOY)',
+                 'vMSP - Value at mean spring',
+                 'vMAU - Value at mean autum',
                  'AOS - Amplitude of season',
                  'IOS - Integral of season [SOS-EOS]',
                  'ROG - Rate of greening [slope SOS-POS]',
@@ -288,25 +293,46 @@ def PhenoLSP(inData, outData, doy, nGS=46, n_phen=10, n_jobs=4, chuckSize=256):
     do_work = partial(_cal_LSP, nGS=nGS, doy=doy, n_phen=n_phen, num=len(bandNames))
     # apply PhenoLSP with parallel processing
     try:
-        _parallel_process(inData, outData, do_work, len(bandNames), n_jobs,
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            _parallel_process(inData, outData, do_work, len(bandNames), n_jobs,
                           chuckSize, bandNames)
     except AttributeError:
         print('ERROR in parallel processing...')
 
 # ---------------------------------------------------------------------------#
 
-
+def RMSE(inData, inShape, outData, dates, nan_replace=None, nGS=46):
     
+    # read rasters
+    with rasterio.open(inShape) as r:
+        meta = r.profile
+        phen = r.read()
+    with rasterio.open(inData) as r:
+        dstack = r.read()
+    
+    # process RMSE
+    rmse = _RMSE2(phen, dstack, dates, nan_replace, nGS)
+   
+    # edit metadata to save raster
+    meta.update(count=1, dtype='float64')
+    
+    # save results
+    with rasterio.open(outData, "w", **meta) as dst:
+        dst.write(rmse)
+      
+
 ###############################################################################
 # Utility functions
 ###############################################################################
 
-def _parallel_process(inData, outData, do_work, count,  n_jobs, chuckSize, bandNames):
+def _parallel_process(inData, outData, do_work, count,  n_jobs, chuckSize,
+                      bandNames):
     """
     Process infile block-by-block with parallel processing
     and write to a new file.
     chunckSize needs t be divisible by 16
-    
+
     """
     if chuckSize % 16 == 0:
         # apply parallel processing with rasterio
@@ -318,7 +344,7 @@ def _parallel_process(inData, outData, do_work, count,  n_jobs, chuckSize, bandN
                 profile = src.profile
                 profile.update(blockxsize=chuckSize, blockysize=chuckSize,
                                count=count, dtype='float64', tiled=True)
-    
+
                 with rasterio.open(outData, "w", **profile) as dst:
                     # Materialize a list of destination block windows
                     # that we will use in several statements below.
@@ -379,9 +405,9 @@ def _getPheno(y, x, nGS, type):
             plt.plot(xnew, ynew)
             plt.plot(x[inds], y[inds], 'X')
             """
-    
+
             return ynew
-        
+
         except NotImplementedError:
             print("ERROR: Interpolation type must be ‘KDE’ ‘linear’, ‘nearest’,"
                   "‘zero’, ‘slinear’, ‘quadratic’, ‘cubic’, ‘RBF‘, ‘previous’,"
@@ -392,28 +418,6 @@ def _getPheno(y, x, nGS, type):
                   "‘previous’ and ‘next’ simply return the previous or next value"
                   "of the point) or as an integer specifying the order of the"
                   "spline interpolator to use. Default is KDE.")
-
-        
-# ---------------------------------------------------------------------------#
-    
-def _RMSE(x, y, xnew, ynew):
-    from sklearn.metrics import mean_squared_error
-    ypred2 = np.interp(x, xnew, ynew)
-    return np.sqrt(mean_squared_error(ypred2, y))
-
-# ---------------------------------------------------------------------------#
-
-def _RMSE2(phen, dstack):
-    
-    xarray = xr.DataArray(dstack)
-    xarray.coords['dim_0'] = dates.dt.dayofyear
-    # sort basds according to day-of-the-year
-    xarray = xarray.sortby('dim_0')
-    if nan_replace is not None:
-        xarray = xarray.where(xarray.values != nan_replace)
-    
-   
-
 
 # ---------------------------------------------------------------------------#
 
@@ -483,9 +487,10 @@ def _getLSPmetrics(phen, xnew, nGS, num):
         vPOS = Value at peak of season
         vEOS = Value at end of season
         LOS = Length of season (DOY)
-        MGS = Mean growing season
-        MSP = Mean senescence season
-        MAU = Mean autum
+        MSP = Mean spring (DOY)
+        MAU = Mean autum (DOY)
+        vMSP = Mean spring value
+        vMAU = Mean autum value
         AOS = Amplitude of season (in value units)
         IOS = Integral of season (SOS-EOS)
         ROG = Rate of greening [slope SOS-POS]
@@ -497,142 +502,147 @@ def _getLSPmetrics(phen, xnew, nGS, num):
         return np.repeat(np.nan, num)
     else:
         try:
-            # basic variables
-            peak = np.max(phen)
-            ipos = np.where(phen == peak)[0]
-            pos = xnew[ipos]
-            trough = np.min(phen)
-            ampl = peak - trough
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
 
-            # get position of seasonal peak and trough
-            ipos = np.where(phen == peak)[0]
+                # basic variables
+                peak = np.max(phen)
+                ipos = np.where(phen == peak)[0]
+                pos = xnew[ipos]
+                trough = np.min(phen)
+                ampl = peak - trough
 
-            # scale annual time series to 0-1
-            ratio = (phen - trough) / ampl
+                # get position of seasonal peak and trough
+                ipos = np.where(phen == peak)[0]
 
-            # select time where SOS and EOS are located (around trs value)
-            # KneeLocator looks for the inflection index in the curve
-            try:
-                with warnings.catch_warnings():
-                    warnings.simplefilter("ignore")
-                    # consider only observation before POS for SOS
-                    knee1 = KneeLocator(xnew[0:ipos[0]], ratio[0:ipos[0]], S=2,
-                                       curve='convex', direction='increasing')
-    
-                    sos = knee1.knee
-                    isos = np.where(xnew == knee1.knee)[0]
-                    
-                    # consider only observation after POS for EOS
-                    x = xnew[-(nGS-ipos[0]-1):]
-                    y = ratio[-(nGS-ipos[0]-1):]
-                    knee2 = KneeLocator(range(len(x)), np.flip(y), S=2,
-                                       curve='convex', direction='increasing')
-                    eos = x[ np.where(np.flip(range(len(x))) == knee2.knee)[0] ]
-                    ieos = np.where(xnew == eos)[0]
-                if sos is None:
-                    isos = 0
-                    sos = xnew[isos]
-                if eos is None:
-                    ieos = len(xnew)-1
-                    eos = xnew[ieos]
-            except ValueError:
-                sos = np.nan
-                isos = np.nan
-                eos = np.nan
-                ieos = np.nan
-            except TypeError:
-                sos = np.nan
-                isos = np.nan
-                eos = np.nan
-                ieos = np.nan
+                # scale annual time series to 0-1
+                ratio = (phen - trough) / ampl
 
-            # los: length of season
-            try:
-                los = eos - sos
-                if los < 0:
-                    los[los < 0] = len(phen) + (eos[los < 0] - sos[los < 0])
-            except ValueError:
-                los = np.nan
-            except TypeError:
-                los = np.nan
+                # select time where SOS and EOS are located (around trs value)
+                # KneeLocator looks for the inflection index in the curve
+                try:
+                    with warnings.catch_warnings():
+                        warnings.simplefilter("ignore")
+                        # consider only observation before POS for SOS
+                        knee1 = KneeLocator(xnew[0:ipos[0]], ratio[0:ipos[0]], S=2,
+                                           curve='convex', direction='increasing')
 
-            # get MGS, MSP, MAU
-            try:
-                mgs = np.mean(phen[ratio > 0.5])  # mean growing season
-                msp = mau = np.nan  # mean senescence season
-                if ~np.isnan(sos):
-                    id = np.arange((isos-10), (isos+10))
-                    id = id[(id > 0) & (id < len(phen))]
-                    msp = []
-                    for i in range(len(id)):
-                        msp.append(phen[id[i]])
-                msp = np.mean(msp)
-                if ~np.isnan(eos):
-                    id = np.arange((ieos-10), (ieos+10))
-                    id = id[(id > 0) & (id < len(phen))]
-                    mau = []
-                    for i in range(len(id)):
-                        mau.append(phen[id[i]])
-                    mau = np.mean(mau)
+                        sos = knee1.knee
+                        isos = np.where(xnew == knee1.knee)[0]
 
-            except ValueError:
-                mgs = np.nan
-                msp = np.nan
-                mau = np.nan
-            except TypeError:
-                mgs = np.nan
-                msp = np.nan
-                mau = np.nan
+                        # consider only observation after POS for EOS
+                        x = xnew[-(nGS-ipos[0]-1):]
+                        y = ratio[-(nGS-ipos[0]-1):]
+                        knee2 = KneeLocator(range(len(x)), np.flip(y), S=2,
+                                           curve='convex', direction='increasing')
+                        eos = x[ np.where(np.flip(range(len(x))) == knee2.knee)[0] ]
+                        ieos = np.where(xnew == eos)[0]
+                    if sos is None:
+                        isos = 0
+                        sos = xnew[isos]
+                    if eos is None:
+                        ieos = len(xnew)-1
+                        eos = xnew[ieos]
+                except ValueError:
+                    sos = np.nan
+                    isos = np.nan
+                    eos = np.nan
+                    ieos = np.nan
+                except TypeError:
+                    sos = np.nan
+                    isos = np.nan
+                    eos = np.nan
+                    ieos = np.nan
 
-            # doy of growing season
-            try:
-                green = xnew[(xnew > sos) & (xnew < eos)]
-                id = []
-                for i in range(len(green)):
-                    id.append((xnew == green[i]).nonzero()[0])
-                # index of growing season
-                id = np.array([item for sublist in id for item in sublist])
-            except ValueError:
-                id = np.nan
-            except TypeError:
-                id = np.nan
+                # los: length of season
+                try:
+                    los = eos - sos
+                    if los < 0:
+                        los[los < 0] = len(phen) + (eos[los < 0] - sos[los < 0])
+                except ValueError:
+                    los = np.nan
+                except TypeError:
+                    los = np.nan
 
-            # get intergral of green season
-            try:
-                ios = trapz(phen[id], xnew[id])
-            except ValueError:
-                ios = np.nan
-            except TypeError:
-                ios = np.nan
+                # get MSP, MAU (independent from SOS and EOS)
+                # mean spring
+                try:
+                    idx = np.mean(xnew[(xnew > sos) & (xnew < pos[0])])
+                    idx = (np.abs(xnew - idx)).argmin() # indexing value
+                    msp = xnew[idx] # DOY of MGS
+                    vmsp = phen[idx] # mgs value
 
-            # rate of greening [slope SOS-POS]
-            try:
-                rog = (peak - phen[isos])/(pos - sos)
-            except ValueError:
-                rog = np.nan
-            except TypeError:
-                rog = np.nan
+                except ValueError:
+                    msp = np.nan
+                    vmsp = np.nan
+                except TypeError:
+                    msp = np.nan
+                    vmsp = np.nan
+                # mean autum
+                try:
+                    idx = np.mean(xnew[(xnew < eos[0]) & (xnew > pos[0])])
+                    idx = (np.abs(xnew - idx)).argmin() # indexing value
+                    mau = xnew[idx] # DOY of MGS
+                    vmau = phen[idx] # mgs value
 
-            # rate of senescence [slope POS-EOS]
-            try:
-                ros = (phen[ieos] - peak)/(eos - pos)
-            except ValueError:
-                ros = np.nan
-            except TypeError:
-                ros = np.nan
+                except ValueError:
+                    mau = np.nan
+                    vmau = np.nan
+                except TypeError:
+                    mau = np.nan
+                    vmau = np.nan
 
-            # skewness of growing season
-            try:
-                sw = skew(phen[id])
-            except ValueError:
-                sw = np.nan
-            except TypeError:
-                sw = np.nan
+                # doy of growing season
+                try:
+                    green = xnew[(xnew > sos) & (xnew < eos)]
+                    id = []
+                    for i in range(len(green)):
+                        id.append((xnew == green[i]).nonzero()[0])
+                    # index of growing season
 
-            metrics = np.array((sos, pos[0], eos[0], phen[isos][0], peak, phen[ieos][0],
-                                los[0], mgs, msp, mau, ampl, ios, rog[0], ros[0], sw))
+                    id = np.array([item for sublist in id for item in sublist])
+                except ValueError:
+                    id = np.nan
+                except TypeError:
+                    id = np.nan
 
-            return metrics
+                # get intergral of green season
+                try:
+                    ios = trapz(phen[id], xnew[id])
+                except ValueError:
+                    ios = np.nan
+                except TypeError:
+                    ios = np.nan
+
+                # rate of greening [slope SOS-POS]
+                try:
+                    rog = (peak - phen[isos])/(pos - sos)
+                except ValueError:
+                    rog = np.nan
+                except TypeError:
+                    rog = np.nan
+
+                # rate of senescence [slope POS-EOS]
+                try:
+                    ros = (phen[ieos] - peak)/(eos - pos)
+                except ValueError:
+                    ros = np.nan
+                except TypeError:
+                    ros = np.nan
+
+                # skewness of growing season
+                try:
+                    sw = skew(phen[id])
+                except ValueError:
+                    sw = np.nan
+                except TypeError:
+                    sw = np.nan
+
+                metrics = np.array((sos, pos[0], eos[0], phen[isos][0], peak,
+                    phen[ieos][0], los[0], msp, mau, vmsp, vmau, ampl, ios, rog[0],
+                    ros[0], sw))
+
+                return metrics
 
         except IndexError:
             return np.repeat(np.nan, num)
@@ -670,7 +680,41 @@ def _cal_LSP(dstack, nGS, doy, n_phen, num):
     return np.apply_along_axis(_getLSPmetrics, 0, dstack, xnew, nGS, num)
 
 # ---------------------------------------------------------------------------#
-  
+
+def _RMSE(x, y, xnew, ynew):
+    from sklearn.metrics import mean_squared_error
+    ypred2 = np.interp(x, xnew, ynew)
+    return np.sqrt(mean_squared_error(ypred2, y))
+
+# ---------------------------------------------------------------------------#
+
+def _RMSE2(phen, dstack, dates, nan_replace, nGS):
+    
+    # original data - dstack
+    xarray = xr.DataArray(dstack)
+    xarray.coords['dim_0'] = dates.dt.dayofyear
+    # sort basds according to day-of-the-year
+    xarray = xarray.sortby('dim_0')
+    if nan_replace is not None:
+        xarray = xarray.where(xarray.values != nan_replace) 
+    xarray.values =  np.apply_along_axis(_fillNaN, 0, xarray.values)
+    x = xarray.dim_0.values
+    y = xarray.values
+    
+    xnew = np.linspace(np.min(x), np.max(x), nGS, dtype='int16')
+    # change shape from 3D to 2D matrix 
+    y2 = y.reshape(y.shape[0], (y.shape[1]*y.shape[2]))
+    ynew = phen.reshape(phen.shape[0], (y.shape[1]*y.shape[2]))
+    
+    rmse = np.zeros((y.shape[1]*y.shape[2]))
+    for i in range(y.shape[1]*y.shape[2]):
+        rmse[i] = _RMSE(x, y2[:,i], xnew, ynew[:,i])
+    
+    # reshape from 2D to 3D
+    return rmse.reshape(1, phen.shape[1], y.shape[2])
+    
+# ---------------------------------------------------------------------------#
+
 def _replaceElements(arr):
     '''
     Replace monotonic vector values to avoid
@@ -702,20 +746,19 @@ def _fillNaN(x):
 
 def _KDE(x, y, nGS):
     """Compute a bivariate kde using KDEpy."""
-    from KDEpy import FFTKDE
-    
+
     # Grid points in the x and y direction
     grid_points_x, grid_points_y = nGS+6, 2**8
-    
+
     # Stack the data for 2D input, compute the KDE
     data = np.vstack((x, y)).T
     kde = FFTKDE(bw=0.025).fit(data)
     grid, points = kde.evaluate((grid_points_x, grid_points_y))
-    
+
     # Retrieve grid values, reshape output and plot boundaries
     x2, y2 = np.unique(grid[:, 0]), np.unique(grid[:, 1])
     z = points.reshape(grid_points_x, grid_points_y)
-    
+
     # Compute y_pred = E[y | x] = sum_y p(y | x) * y
     y_pred = np.sum((z.T / np.sum(z, axis=1)).T  * y2 , axis=1)
     id = np.where(x2 < np.min(x))
@@ -723,12 +766,5 @@ def _KDE(x, y, nGS):
     y_pred = np.delete(y_pred, id)
     id = np.where(x2 > np.max(x))
     y_pred = np.delete(y_pred, id)
-    
+
     return y_pred
-
-
-    
-    
-    
-    
-    
