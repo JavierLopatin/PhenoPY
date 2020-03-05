@@ -1,6 +1,6 @@
 ###############################################################################
 #
-# PhenoPy is a Python 3.X library to process temporal data derived from
+# PhenoPy is a Python 3.X library to process phenology indices derived from
 # EarthObservation data.
 #
 ###############################################################################
@@ -19,23 +19,23 @@ import matplotlib.pyplot as plt
 from scipy.integrate import trapz
 from scipy.interpolate import Rbf, interp1d
 from scipy.stats import skew
+from sklearn.metrics import mean_squared_error
 
 # speciel dependencies
-import xarray as xr                 # manipulate 3D time-series rasters
-from shapely.geometry import Point  # create geographical points
-import rasterio                     # manipulate GeoTIFF
-from rasterstats import point_query # extract raster values
-from tqdm import tqdm               # progress bar
-from kneed import KneeLocator       # find inflection point on a curve
-from KDEpy import FFTKDE            # perform fast 2D kernel density estimations
+import xarray as xr                  # manipulate 3D time-series rasters
+import shapely.geometry as geom      # create geographical points
+import rasterio                      # manipulate GeoTIFF
+from rasterstats import point_query  # extract raster values
+from tqdm import tqdm                # progress bar
+from kneed import KneeLocator        # find inflection point on a curve
+from KDEpy import FFTKDE             # perform fast 2D kernel density estimations
 
 
 # --------------------------------------------------------------------------- #
 # ------------------------------- FUNCTIONS --------------------------------- #
 # --------------------------------------------------------------------------- #
 def PhenoPlot(X, Y, inData, dates, type='KDE', saveFigure=None, ylim=None,
-              rollWindow=None, nan_replace=None, plotType=1, nGS=46, n_phen=15,
-              fontsize=14, ylab='NDVI'):
+              rollWindow=None, nan_replace=None, correctionValue=None, plotType=1, phentype=1, nGS=46, n_phen=15, fontsize=14, threshold=300, ylab='NDVI'):
     """
     Plot the PhenoShape curve along with the yearly data
 
@@ -47,7 +47,7 @@ def PhenoPlot(X, Y, inData, dates, type='KDE', saveFigure=None, ylim=None,
             Y coordinates
     - inData: String
             Absolute path to the original timeseries data
-    - dates: String
+    - dates: Series
             Dates of the original timeseries data [dtype: datetime64[ns]]
     - type = String or Integer
             Interpolation type. Must be a string of ‘linear’, ‘nearest’,
@@ -76,7 +76,7 @@ def PhenoPlot(X, Y, inData, dates, type='KDE', saveFigure=None, ylim=None,
 
     """
     # get spatial point
-    point = Point(X, Y)
+    point = geom.Point(X, Y)
     # get pixel value per pixel
     # first read metadata to get number of bands
     with rasterio.open(inData) as r:
@@ -87,6 +87,9 @@ def PhenoPlot(X, Y, inData, dates, type='KDE', saveFigure=None, ylim=None,
     for i in range(countTSS):
         valuesTSS.append(point_query(point, inData, band=(i + 1)))
     valuesTSS = np.array(valuesTSS, dtype=np.float).squeeze()
+
+    if correctionValue is not None:
+        valuesTSS = valuesTSS/correctionValue
 
     # load dates
     valuesTSSpd = pd.concat([pd.DataFrame(dates),
@@ -104,6 +107,7 @@ def PhenoPlot(X, Y, inData, dates, type='KDE', saveFigure=None, ylim=None,
     xarray = xr.DataArray(valuesTSSpd.VI)
     # DOY coordinates
     xarray['dim_0'] = valuesTSSpd.doy
+
     # rolling average using moving window
     if rollWindow is not None:
         start = xarray.values[0:2]
@@ -119,27 +123,41 @@ def PhenoPlot(X, Y, inData, dates, type='KDE', saveFigure=None, ylim=None,
     xnew = np.linspace(np.min(valuesTSSpd.doy), np.max(valuesTSSpd.doy), nGS,
                        dtype='int16')
 
+    # get outliars
+    outliars_id = _getOutliars(
+        xnew, phen, valuesTSSpd.doy, xarray.values, threshold)
+
+    if len(outliars_id) != 0:
+        y2 = np.delete(xarray.values, outliars_id)
+        x2 = np.delete(valuesTSSpd.doy.values, outliars_id)
+
+        phen = _getPheno(y2, x2, nGS, type)
+        xnew = np.linspace(np.min(x2), np.max(x2), nGS, dtype='int16')
+
     # plot
     if plotType == 1:
-        rmse = _RMSE(valuesTSSpd.doy.values, valuesTSSpd.VI.values, xnew, phen)
-        rmse = np.round(rmse, 2)
+        rmse = _RMSE(valuesTSSpd.doy.values,
+                     valuesTSSpd.VI.values, xnew, phen).round(2)
 
         for name, group in groups:
             plt.plot(group.doy, group.VI, marker='o',
                      linestyle='', ms=10, label=name)
         plt.plot(xnew, phen, '-', color='black')
+        # Show outliars if any
+        if len(outliars_id) != 0:
+            plt.plot(xarray.dim_0.values[outliars_id], xarray.values[outliars_id], marker='x',
+                     linestyle='', color='black')
         plt.legend(prop={'size': 12})
-        plt.title('RMSE = '+str(rmse), loc='left', size=15)
+        plt.title('RMSE = ' + str(rmse), loc='left', size=15)
         if ylim is not None:
             plt.ylim(ylim[0], ylim[1])
+
         plt.ylabel(ylab, fontsize=fontsize)
         plt.xlabel('Day of the year', fontsize=fontsize)
 
-
-
     elif plotType == 2:
         # get position of SOS, POS, and EOS
-        metrics = _getLSPmetrics(phen, xnew, nGS, len(xnew))
+        metrics = _getLSPmetrics(phen, xnew, nGS, len(xnew), phentype)
         isos = np.where(xnew == metrics[0])[0][0]
         ipos = np.where(xnew == metrics[1])[0][0]
         ieos = np.where(xnew == metrics[2])[0][0]
@@ -163,6 +181,7 @@ def PhenoPlot(X, Y, inData, dates, type='KDE', saveFigure=None, ylim=None,
     plt.show()
 
 # ---------------------------------------------------------------------------#
+
 
 def PhenoShape(inData, outData, dates, interpolType='KDE', nan_replace=None,
                rollWindow=None, nGS=46, n_jobs=4, chuckSize=256):
@@ -219,15 +238,15 @@ def PhenoShape(inData, outData, dates, interpolType='KDE', nan_replace=None,
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             _parallel_process(inData, outData, do_work, nGS, n_jobs, chuckSize,
-                          bandNames)
+                              bandNames)
     except AttributeError:
         print('ERROR in parallel processing...')
 
 
-
 # ---------------------------------------------------------------------------#
 
-def PhenoLSP(inData, outData, doy, nGS=46, n_phen=10, n_jobs=4, chuckSize=256):
+def PhenoLSP(inData, outData, doy, nGS=46, phentype=1, n_phen=10, n_jobs=4,
+             chuckSize=256):
     """
     Obtain land surfurface phenology metrics for a PhenoShape product
 
@@ -254,21 +273,22 @@ def PhenoLSP(inData, outData, doy, nGS=46, n_phen=10, n_jobs=4, chuckSize=256):
     outputs
     -------
     Raster stack with the followingvariables:
-        - SOS: DOY of start of season
-        - POS: DOY of peak of season
-        - EOS: DOY of end of season
-        - vSOS: Value at start of season
-        - vPOS: Value at peak of season
-        - vEOS: Value at end of season
-        - LOS: Length of season (DOY)
-        - MGS: Mean growing season
-        - MSP: Mean senescence season
-        - MAU: Mean autum
-        - AOS: Amplitude of season (in value units)
-        - IOS: Integral of season (SOS-EOS)
-        - ROG: Rate of greening [slope SOS-POS]
-        - ROS: Rate of senescence [slope POS-EOS]
-        - SW: Skewness of growing season
+        - SOS - DOY of Start of season
+        - POS - DOY of Peak of season
+        - POS - DOY of End of season
+        - vSOS - Vaues at start os season
+        - vPOS - Values at peak of season
+        - vEOS - Values at end of season
+        - LOS - Length of season
+        - MSP - Mid spring (DOY)
+        - MAU - Mid autum (DOY)
+        - vMSP - Value at mid spring
+        - vMAU - Value at mid autum
+        - AOS - Amplitude of season
+        - IOS - Integral of season [SOS-EOS]
+        - ROG - Rate of greening [slope SOS-POS]
+        - ROS - Rate of senescence [slope POS-EOS]
+        - SW - Skewness of growing season [SOS-EOS]
     """
 
     # name of output bands
@@ -279,8 +299,8 @@ def PhenoLSP(inData, outData, doy, nGS=46, n_phen=10, n_jobs=4, chuckSize=256):
                  'vPOS - Values at peak of season',
                  'vEOS - Values at end of season',
                  'LOS - Length of season',
-                 'MSP - Mean spring (DOY)',
-                 'MAU - Mean autum (DOY)',
+                 'MSP - Mid spring (DOY)',
+                 'MAU - Mid autum (DOY)',
                  'vMSP - Value at mean spring',
                  'vMAU - Value at mean autum',
                  'AOS - Amplitude of season',
@@ -290,41 +310,104 @@ def PhenoLSP(inData, outData, doy, nGS=46, n_phen=10, n_jobs=4, chuckSize=256):
                  'SW - Skewness of growing season [SOS-EOS]']
 
     # call _cal_LSP function to local
-    do_work = partial(_cal_LSP, nGS=nGS, doy=doy, n_phen=n_phen, num=len(bandNames))
+    do_work = partial(_cal_LSP, nGS=nGS, phentype=phentype, doy=doy,
+                      n_phen=n_phen, num=len(bandNames))
     # apply PhenoLSP with parallel processing
     try:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             _parallel_process(inData, outData, do_work, len(bandNames), n_jobs,
-                          chuckSize, bandNames)
+                              chuckSize, bandNames)
     except AttributeError:
         print('ERROR in parallel processing...')
 
 # ---------------------------------------------------------------------------#
 
+
 def RMSE(inData, inShape, outData, dates, nan_replace=None, nGS=46):
-    
+    """
+    Obtain Root Mean Square Error (RMSE) values between the fitted PhenoShape
+    and the real distribution of values
+
+    Parameters
+    ----------
+    - inData: String
+        Absolute path to original timeseries data
+    - inShape: String
+        Absolute path to PhenoShape data
+    - outData: String
+        Absolute path for output RMSE raster
+    - dates: Series
+        Dates of the original timeseries data [dtype: datetime64[ns]]
+    - nan_replace: Integer
+        Value of the NaN data if there are any
+    - nGS: Integer
+        Number of observations to predict the PhenoShape
+        default is 46; one per week
+
+    outputs
+    -------
+    Single-band raster with RMSE values (in same raw units as inData)
+    """
     # read rasters
     with rasterio.open(inShape) as r:
         meta = r.profile
         phen = r.read()
     with rasterio.open(inData) as r:
         dstack = r.read()
-    
+
     # process RMSE
     rmse = _RMSE2(phen, dstack, dates, nan_replace, nGS)
-   
+
     # edit metadata to save raster
     meta.update(count=1, dtype='float64')
-    
+
     # save results
     with rasterio.open(outData, "w", **meta) as dst:
         dst.write(rmse)
-      
+
+        """
+
+    # call _cal_LSP function to local
+    do_work = partial(_RMSE2, dates=dates, nan_replace=nan_replace, nGS=nGS)
+
+    if chuckSize % 16 == 0:
+        # apply parallel processing with rasterio
+        with rasterio.Env():
+            # open first raster
+            with rasterio.open(inData) as src:
+                profile = src.profile
+                profile.update(blockxsize=chuckSize, blockysize=chuckSize,
+                               count=1, dtype='float64', tiled=True)
+                # create raster to save chuncks
+                with rasterio.open(outData, "w", **profile) as dst:
+                    windows = [window for ij, window in dst.block_windows()]
+                    data_gen = (src.read(window=window) for window in windows)
+                    # OPEN SECOND RASTER!
+                    with rasterio.open(inShape) as r:
+                        data_gen2 = (r.read(window=window) for window in windows)
+                        with concurrent.futures.ProcessPoolExecutor(
+                            max_workers=n_jobs
+                        ) as executor:
+                            for window, result in zip(
+                                tqdm(windows), executor.map(lambda x, y: do_work(x, y), data_gen, data_gen2)
+                            ):
+                                dst.write(result, window=window)
+
+
+
+                # save band description to metadata
+                        for i in range(profile['count']):
+                            dst.set_band_description(i + 1, bandNames[i])
+    else:
+        print('ERROR! chuckSize needs to be divisible by 16')
+
+    """
 
 ###############################################################################
 # Utility functions
 ###############################################################################
+
 
 def _parallel_process(inData, outData, do_work, count,  n_jobs, chuckSize,
                       bandNames):
@@ -372,6 +455,7 @@ def _parallel_process(inData, outData, do_work, count,  n_jobs, chuckSize,
         print('ERROR! chuckSize needs to be divisible by 16')
 # ---------------------------------------------------------------------------#
 
+
 def _getPheno(y, x, nGS, type):
     """
     Apply linear interpolation in the 'time' axis
@@ -385,19 +469,19 @@ def _getPheno(y, x, nGS, type):
         try:
             xnew = np.linspace(np.min(x), np.max(x), nGS, dtype='int16')
             if inds.any():  # if inds have at least one True
-                #x = x[~inds]
-                #y = y[~inds]
+                # x = x[~inds]
+                # y = y[~inds]
                 y = _fillNaN(y)
             if type == 'linear':
                 ynew = np.interp(xnew, x, y)
             elif type == 'RBF':
-                _replaceElements(x) # replace doy values when are the same
+                _replaceElements(x)  # replace doy values when are the same
                 f = Rbf(x, y, funciton='cubic')
                 ynew = f(xnew)
             elif type == 'KDE':
                 ynew = _KDE(x, y, nGS)
             else:
-                _replaceElements(x) # replace doy values when are the same
+                _replaceElements(x)  # replace doy values when are the same
                 f = interp1d(x, y, kind=type)
                 ynew = f(xnew)
             """
@@ -421,6 +505,7 @@ def _getPheno(y, x, nGS, type):
 
 # ---------------------------------------------------------------------------#
 
+
 def _getPheno2(dstack, dates, nGS, rollWindow, nan_replace, type):
     """
     Obtain shape of phenological responses
@@ -433,17 +518,17 @@ def _getPheno2(dstack, dates, nGS, rollWindow, nan_replace, type):
     # Transform numpy array to xarray
     xarray = xr.DataArray(dstack)
     xarray.coords['dim_0'] = dates.dt.dayofyear
-    #xarray.coords['doy'] = xarray.dim_0.dt.dayofyear
+    # xarray.coords['doy'] = xarray.dim_0.dt.dayofyear
 
     # sort basds according to day-of-the-year
     xarray = xarray.sortby('dim_0')
     # rearrange time dimension for smoothing and interpolation
-    #xarray['dim_0'].values = xarray['doy']
+    # xarray['dim_0'].values = xarray['doy']
 
     # turn a value to NaN
     if nan_replace is not None:
         xarray = xarray.where(xarray.values != nan_replace)
-        #xarray.values = np.apply_along_axis(_fillNaN, 0, xarray.values)
+        # xarray.values = np.apply_along_axis(_fillNaN, 0, xarray.values)
     # rolling average using moving window    # rolling average using moving window
     if rollWindow is not None:
         start = xarray.values[0:2]
@@ -451,7 +536,7 @@ def _getPheno2(dstack, dates, nGS, rollWindow, nan_replace, type):
         xarray = xarray.rolling(dim_0=rollWindow, center=True).mean()
         xarray.values[0:2] = start
         xarray.values[-2:] = end
-        #xarray.values =  np.apply_along_axis(_fillNaN, 0, xarray.values)
+        # xarray.values =  np.apply_along_axis(_fillNaN, 0, xarray.values)
     # prepare inputs to getPheno
     x = xarray.dim_0.values
     y = xarray.values
@@ -461,7 +546,8 @@ def _getPheno2(dstack, dates, nGS, rollWindow, nan_replace, type):
 
 # ---------------------------------------------------------------------------#
 
-def _getLSPmetrics(phen, xnew, nGS, num):
+
+def _getLSPmetrics(phen, xnew, nGS, num, phentype):
     """
     Obtain land surfurface phenology metrics
 
@@ -506,42 +592,57 @@ def _getLSPmetrics(phen, xnew, nGS, num):
                 warnings.simplefilter("ignore")
 
                 # basic variables
-                peak = np.max(phen)
-                ipos = np.where(phen == peak)[0]
+                vpos = np.max(phen)
+                ipos = np.where(phen == vpos)[0]
                 pos = xnew[ipos]
                 trough = np.min(phen)
-                ampl = peak - trough
+                ampl = vpos - trough
 
                 # get position of seasonal peak and trough
-                ipos = np.where(phen == peak)[0]
+                ipos = np.where(phen == vpos)[0]
 
                 # scale annual time series to 0-1
                 ratio = (phen - trough) / ampl
+
+                # separate greening from senesence values
+                dev = np.gradient(ratio)  # first derivative
+                greenup = np.zeros([ratio.shape[0]],  dtype=bool)
+                greenup[dev > 0] = True
 
                 # select time where SOS and EOS are located (around trs value)
                 # KneeLocator looks for the inflection index in the curve
                 try:
                     with warnings.catch_warnings():
-                        warnings.simplefilter("ignore")
-                        # consider only observation before POS for SOS
-                        knee1 = KneeLocator(xnew[0:ipos[0]], ratio[0:ipos[0]], S=2,
-                                           curve='convex', direction='increasing')
+                        if phentype == 1:  # estimate SOS and EOS as median of the season
+                            i = np.median(xnew[:ipos[0]][greenup[:ipos[0]]])
+                            ii = np.median(xnew[ipos[0]:][~greenup[ipos[0]:]])
+                            sos = xnew[(np.abs(xnew - i)).argmin()]
+                            eos = xnew[(np.abs(xnew - ii)).argmin()]
+                            isos = np.where(xnew == int(sos))[0]
+                            ieos = np.where(xnew == eos)[0]
+                        elif phentype == 2:  # estimate SOS and EOS by inflection curves
+                            warnings.simplefilter("ignore")
+                            # consider only observation before POS for SOS
+                            knee1 = KneeLocator(xnew[0:ipos[0]], ratio[0:ipos[0]], S=2,
+                                                curve='convex', direction='increasing')
+                            sos = knee1.knee
+                            isos = np.where(xnew == knee1.knee)[0]
 
-                        sos = knee1.knee
-                        isos = np.where(xnew == knee1.knee)[0]
-
-                        # consider only observation after POS for EOS
-                        x = xnew[-(nGS-ipos[0]-1):]
-                        y = ratio[-(nGS-ipos[0]-1):]
-                        knee2 = KneeLocator(range(len(x)), np.flip(y), S=2,
-                                           curve='convex', direction='increasing')
-                        eos = x[ np.where(np.flip(range(len(x))) == knee2.knee)[0] ]
-                        ieos = np.where(xnew == eos)[0]
+                            # consider only observation after POS for EOS
+                            x = xnew[-(nGS - ipos[0] - 1):]
+                            y = ratio[-(nGS - ipos[0] - 1):]
+                            knee2 = KneeLocator(range(len(x)), np.flip(y), S=2,
+                                                curve='convex', direction='increasing')
+                            eos = x[np.where(
+                                np.flip(range(len(x))) == knee2.knee)[0]][0]
+                            ieos = np.where(xnew == eos)[0]
+                        else:
+                            print('phentype must be either 1 or 2')
                     if sos is None:
                         isos = 0
                         sos = xnew[isos]
                     if eos is None:
-                        ieos = len(xnew)-1
+                        ieos = len(xnew) - 1
                         eos = xnew[ieos]
                 except ValueError:
                     sos = np.nan
@@ -558,7 +659,8 @@ def _getLSPmetrics(phen, xnew, nGS, num):
                 try:
                     los = eos - sos
                     if los < 0:
-                        los[los < 0] = len(phen) + (eos[los < 0] - sos[los < 0])
+                        los[los < 0] = len(phen) + \
+                            (eos[los < 0] - sos[los < 0])
                 except ValueError:
                     los = np.nan
                 except TypeError:
@@ -568,9 +670,9 @@ def _getLSPmetrics(phen, xnew, nGS, num):
                 # mean spring
                 try:
                     idx = np.mean(xnew[(xnew > sos) & (xnew < pos[0])])
-                    idx = (np.abs(xnew - idx)).argmin() # indexing value
-                    msp = xnew[idx] # DOY of MGS
-                    vmsp = phen[idx] # mgs value
+                    idx = (np.abs(xnew - idx)).argmin()  # indexing value
+                    msp = xnew[idx]  # DOY of MGS
+                    vmsp = phen[idx]  # mgs value
 
                 except ValueError:
                     msp = np.nan
@@ -580,10 +682,10 @@ def _getLSPmetrics(phen, xnew, nGS, num):
                     vmsp = np.nan
                 # mean autum
                 try:
-                    idx = np.mean(xnew[(xnew < eos[0]) & (xnew > pos[0])])
-                    idx = (np.abs(xnew - idx)).argmin() # indexing value
-                    mau = xnew[idx] # DOY of MGS
-                    vmau = phen[idx] # mgs value
+                    idx = np.mean(xnew[(xnew < eos) & (xnew > pos[0])])
+                    idx = (np.abs(xnew - idx)).argmin()  # indexing value
+                    mau = xnew[idx]  # DOY of MGS
+                    vmau = phen[idx]  # mgs value
 
                 except ValueError:
                     mau = np.nan
@@ -599,7 +701,6 @@ def _getLSPmetrics(phen, xnew, nGS, num):
                     for i in range(len(green)):
                         id.append((xnew == green[i]).nonzero()[0])
                     # index of growing season
-
                     id = np.array([item for sublist in id for item in sublist])
                 except ValueError:
                     id = np.nan
@@ -616,7 +717,7 @@ def _getLSPmetrics(phen, xnew, nGS, num):
 
                 # rate of greening [slope SOS-POS]
                 try:
-                    rog = (peak - phen[isos])/(pos - sos)
+                    rog = (vpos - phen[isos]) / (pos - sos)
                 except ValueError:
                     rog = np.nan
                 except TypeError:
@@ -624,7 +725,7 @@ def _getLSPmetrics(phen, xnew, nGS, num):
 
                 # rate of senescence [slope POS-EOS]
                 try:
-                    ros = (phen[ieos] - peak)/(eos - pos)
+                    ros = (phen[ieos] - vpos) / (eos - pos)
                 except ValueError:
                     ros = np.nan
                 except TypeError:
@@ -638,9 +739,9 @@ def _getLSPmetrics(phen, xnew, nGS, num):
                 except TypeError:
                     sw = np.nan
 
-                metrics = np.array((sos, pos[0], eos[0], phen[isos][0], peak,
-                    phen[ieos][0], los[0], msp, mau, vmsp, vmau, ampl, ios, rog[0],
-                    ros[0], sw))
+                metrics = np.array((sos, pos[0], eos, phen[isos][0], vpos,
+                                    phen[ieos][0], los, msp, mau, vmsp, vmau, ampl, ios, rog[0],
+                                    ros[0], sw))
 
                 return metrics
 
@@ -653,7 +754,8 @@ def _getLSPmetrics(phen, xnew, nGS, num):
 
 # ---------------------------------------------------------------------------#
 
-def _cal_LSP(dstack, nGS, doy, n_phen, num):
+
+def _cal_LSP(dstack, nGS, doy, n_phen, num, phentype):
     """
     Process the _LSP funciton into an 3D arrays
 
@@ -677,43 +779,67 @@ def _cal_LSP(dstack, nGS, doy, n_phen, num):
     xnew = np.linspace(np.min(doy), np.max(doy), nGS, dtype='int16')
 
     # estimate LSP metrics along the 0 axis
-    return np.apply_along_axis(_getLSPmetrics, 0, dstack, xnew, nGS, num)
+    return np.apply_along_axis(_getLSPmetrics, 0, dstack, xnew, nGS, num, phentype)
 
 # ---------------------------------------------------------------------------#
+
 
 def _RMSE(x, y, xnew, ynew):
-    from sklearn.metrics import mean_squared_error
-    ypred2 = np.interp(x, xnew, ynew)
-    return np.sqrt(mean_squared_error(ypred2, y))
+    """
+    Obtain RMSE values form 1D data inputs
+
+    Parameters
+    ----------
+    - x, y: 1D array
+        Values for DOY and time series data from the original dataset
+    - xnew, ynew: 1D array
+        Values of DOY and PhenoShape obtained by PhenoShape function
+    """
+
+    inds = np.isnan(ynew)  # check if array has NaN values
+    inds2 = np.isnan(y)
+    if inds.any():  # check is all values are NaN
+        return np.nan
+    else:
+        if inds2.any():
+            y = _fillNaN(y)
+        ypred2 = np.interp(x, xnew, ynew)
+
+        return np.sqrt(mean_squared_error(ypred2, y))
 
 # ---------------------------------------------------------------------------#
 
+
 def _RMSE2(phen, dstack, dates, nan_replace, nGS):
-    
+    """
+    Apply _RMSE funciton to a spatial 3D arrays
+    """
     # original data - dstack
     xarray = xr.DataArray(dstack)
     xarray.coords['dim_0'] = dates.dt.dayofyear
     # sort basds according to day-of-the-year
     xarray = xarray.sortby('dim_0')
     if nan_replace is not None:
-        xarray = xarray.where(xarray.values != nan_replace) 
-    xarray.values =  np.apply_along_axis(_fillNaN, 0, xarray.values)
+        xarray = xarray.where(xarray.values != nan_replace)
+    # xarray.values =  np.apply_along_axis(_fillNaN, 0, xarray.values)
     x = xarray.dim_0.values
     y = xarray.values
-    
+
     xnew = np.linspace(np.min(x), np.max(x), nGS, dtype='int16')
-    # change shape from 3D to 2D matrix 
-    y2 = y.reshape(y.shape[0], (y.shape[1]*y.shape[2]))
-    ynew = phen.reshape(phen.shape[0], (y.shape[1]*y.shape[2]))
-    
-    rmse = np.zeros((y.shape[1]*y.shape[2]))
-    for i in range(y.shape[1]*y.shape[2]):
-        rmse[i] = _RMSE(x, y2[:,i], xnew, ynew[:,i])
-    
+    # change shape from 3D to 2D matrix
+    y2 = y.reshape(y.shape[0], (y.shape[1] * y.shape[2]))
+    ynew = phen.reshape(phen.shape[0], (y.shape[1] * y.shape[2]))
+
+    rmse = np.zeros((y.shape[1] * y.shape[2]))
+    for i in tqdm(range(y.shape[1] * y.shape[2])):
+        # print(i)
+        rmse[i] = _RMSE(x, y2[:, i], xnew, ynew[:, i])
+
     # reshape from 2D to 3D
     return rmse.reshape(1, phen.shape[1], y.shape[2])
-    
+
 # ---------------------------------------------------------------------------#
+
 
 def _replaceElements(arr):
     '''
@@ -736,6 +862,7 @@ def _replaceElements(arr):
 
 # ---------------------------------------------------------------------------#
 
+
 def _fillNaN(x):
     # Fill NaN data by linear interpolation
     mask = np.isnan(x)
@@ -744,11 +871,12 @@ def _fillNaN(x):
 
 # ---------------------------------------------------------------------------#
 
+
 def _KDE(x, y, nGS):
     """Compute a bivariate kde using KDEpy."""
 
     # Grid points in the x and y direction
-    grid_points_x, grid_points_y = nGS+6, 2**8
+    grid_points_x, grid_points_y = nGS + 6, 2**8
 
     # Stack the data for 2D input, compute the KDE
     data = np.vstack((x, y)).T
@@ -760,7 +888,7 @@ def _KDE(x, y, nGS):
     z = points.reshape(grid_points_x, grid_points_y)
 
     # Compute y_pred = E[y | x] = sum_y p(y | x) * y
-    y_pred = np.sum((z.T / np.sum(z, axis=1)).T  * y2 , axis=1)
+    y_pred = np.sum((z.T / np.sum(z, axis=1)).T * y2, axis=1)
     id = np.where(x2 < np.min(x))
     x2 = np.delete(x2, id)
     y_pred = np.delete(y_pred, id)
@@ -768,3 +896,20 @@ def _KDE(x, y, nGS):
     y_pred = np.delete(y_pred, id)
 
     return y_pred
+
+# algorithm for outliar detection
+
+
+def _getOutliars(xnew, phen, x, y, threshold=500):
+
+    # create geometry objects
+    line = geom.LineString(tuple(zip(xnew, phen)))
+    points = geom.MultiPoint(tuple(zip(x, y)))
+    # get distances between the fitted line and the observed points
+    dist = []
+    for i in range(y.shape[0]):
+        dist.append(line.distance(points[i]))
+
+    dist = pd.DataFrame(dist)
+
+    return dist.loc[dist[0] > threshold].index.values
