@@ -34,8 +34,9 @@ from KDEpy import FFTKDE             # perform fast 2D kernel density estimation
 # --------------------------------------------------------------------------- #
 # ------------------------------- FUNCTIONS --------------------------------- #
 # --------------------------------------------------------------------------- #
-def PhenoPlot(X, Y, inData, dates, type='KDE', saveFigure=None, ylim=None,
-              rollWindow=None, nan_replace=None, correctionValue=None, plotType=1, phentype=1, nGS=46, n_phen=15, fontsize=14, threshold=300, ylab='NDVI'):
+def PhenoPlot(X, Y, inData, dates, type='KDE', saveFigure=None, ylim=None, rollWindow=None,
+              nan_replace=None, correctionValue=None, plotType=1, phentype=1, nGS=46, n_phen=15,
+              fontsize=14, threshold=300, ylab='NDVI'):
     """
     Plot the PhenoShape curve along with the yearly data
 
@@ -136,8 +137,13 @@ def PhenoPlot(X, Y, inData, dates, type='KDE', saveFigure=None, ylim=None,
 
     # plot
     if plotType == 1:
-        rmse = _RMSE(valuesTSSpd.doy.values,
-                     valuesTSSpd.VI.values, xnew, phen).round(2)
+        # get %RMSE
+        rmse = _RMSE(valuesTSSpd.doy.values, valuesTSSpd.VI.values, 
+                     xnew, phen)#.round(2)
+        minn = np.nanmin(valuesTSS)
+        maxx = np.nanmax(valuesTSS)
+        nRMSE = ((rmse/(maxx-minn))*100).round(2)
+        
 
         for name, group in groups:
             plt.plot(group.doy, group.VI, marker='o',
@@ -148,7 +154,7 @@ def PhenoPlot(X, Y, inData, dates, type='KDE', saveFigure=None, ylim=None,
             plt.plot(xarray.dim_0.values[outliars_id], xarray.values[outliars_id], marker='x',
                      linestyle='', color='black')
         plt.legend(prop={'size': 12})
-        plt.title('RMSE = ' + str(rmse), loc='left', size=15)
+        plt.title('%RMSE = ' + str(nRMSE), loc='left', size=15)
         if ylim is not None:
             plt.ylim(ylim[0], ylim[1])
 
@@ -324,7 +330,7 @@ def PhenoLSP(inData, outData, doy, nGS=46, phentype=1, n_phen=10, n_jobs=4,
 # ---------------------------------------------------------------------------#
 
 
-def RMSE(inData, inShape, outData, dates, nan_replace=None, nGS=46):
+def RMSE(inData, inShape, outData, dates, normalized=False, nan_replace=None, nGS=46):
     """
     Obtain Root Mean Square Error (RMSE) values between the fitted PhenoShape
     and the real distribution of values
@@ -339,6 +345,9 @@ def RMSE(inData, inShape, outData, dates, nan_replace=None, nGS=46):
         Absolute path for output RMSE raster
     - dates: Series
         Dates of the original timeseries data [dtype: datetime64[ns]]
+    - normalized: Boolean
+        Perform a normalization of the RMSE values into percentages units
+        Default if False
     - nan_replace: Integer
         Value of the NaN data if there are any
     - nGS: Integer
@@ -349,15 +358,28 @@ def RMSE(inData, inShape, outData, dates, nan_replace=None, nGS=46):
     -------
     Single-band raster with RMSE values (in same raw units as inData)
     """
+ 
     # read rasters
     with rasterio.open(inShape) as r:
         meta = r.profile
         phen = r.read()
     with rasterio.open(inData) as r:
         dstack = r.read()
-
+    
+    # repalce NaN if needed
+    t1 = np.isin(dstack, nan_replace)
+    if np.any(t1):
+        dstack = dstack.astype('Float64')
+        dstack[dstack == nan_replace] = np.nan
+    
     # process RMSE
     rmse = _RMSE2(phen, dstack, dates, nan_replace, nGS)
+    
+    # normalization
+    if normalized==True:
+        minn = np.nanmin(dstack, axis=0)
+        maxx = np.nanmax(dstack, axis=0)
+        rmse = ((rmse/(maxx-minn))*100)
 
     # edit metadata to save raster
     meta.update(count=1, dtype='float64')
