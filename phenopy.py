@@ -36,7 +36,7 @@ from KDEpy import FFTKDE             # perform fast 2D kernel density estimation
 # --------------------------------------------------------------------------- #
 def PhenoPlot(X, Y, inData, dates, type='KDE', saveFigure=None, ylim=None, rollWindow=None,
               nan_replace=None, correctionValue=None, plotType=1, phentype=1, nGS=46, n_phen=15,
-              fontsize=14, threshold=300, ylab='NDVI'):
+              fontsize=14, titlesize=15, legendsize=15, labelsize=13, threshold=300, ylab='NDVI'):
     """
     Plot the PhenoShape curve along with the yearly data
 
@@ -89,51 +89,28 @@ def PhenoPlot(X, Y, inData, dates, type='KDE', saveFigure=None, ylim=None, rollW
         valuesTSS.append(point_query(point, inData, band=(i + 1)))
     valuesTSS = np.array(valuesTSS, dtype=np.float).squeeze()
 
-    if correctionValue is not None:
-        valuesTSS = valuesTSS/correctionValue
+    if nan_replace is not None:
+        valuesTSS = np.where(valuesTSS == nan_replace, np.nan, valuesTSS)
 
-    # load dates
+    # add dates
     valuesTSSpd = pd.concat([pd.DataFrame(dates),
                              pd.DataFrame(dates.dt.dayofyear),
                              pd.DataFrame(dates.dt.year),
                              pd.DataFrame(valuesTSS)], axis=1)
     valuesTSSpd.columns = ['dates', 'doy', 'year', 'VI']
     valuesTSSpd = valuesTSSpd.sort_values('doy')
-    valuesTSSpd.VI = _fillNaN(valuesTSSpd.VI.values)
 
     # group values according to year
     groups = valuesTSSpd.groupby('year')
 
-    # Transform numpy array to xarray
-    xarray = xr.DataArray(valuesTSSpd.VI)
-    # DOY coordinates
-    xarray['dim_0'] = valuesTSSpd.doy
-
-    # rolling average using moving window
-    if rollWindow is not None:
-        start = xarray.values[0:2]
-        end = xarray.values[-2:]
-        xarray = xarray.rolling(dim_0=rollWindow, center=True).mean()
-        xarray.values[0:2] = start
-        xarray.values[-2:] = end
-        xarray.values = _fillNaN(xarray.values)
-
     # get phenological shape
-    phen = _getPheno(xarray.values, valuesTSSpd.doy.values, nGS, type)
+    phen = _getPheno0(y=valuesTSS, DOY=dates.dt.dayofyear, interpolType=type, 
+                       correctionValue=correctionValue, nan_replace=None,
+                       rollWindow=rollWindow, nGS=nGS)
+
     # doy of the predicted phenological shape
     xnew = np.linspace(np.min(valuesTSSpd.doy), np.max(valuesTSSpd.doy), nGS,
                        dtype='int16')
-
-    # get outliars
-    outliars_id = _getOutliars(
-        xnew, phen, valuesTSSpd.doy, xarray.values, threshold)
-
-    if len(outliars_id) != 0:
-        y2 = np.delete(xarray.values, outliars_id)
-        x2 = np.delete(valuesTSSpd.doy.values, outliars_id)
-
-        phen = _getPheno(y2, x2, nGS, type)
-        xnew = np.linspace(np.min(x2), np.max(x2), nGS, dtype='int16')
 
     # plot
     if plotType == 1:
@@ -144,17 +121,13 @@ def PhenoPlot(X, Y, inData, dates, type='KDE', saveFigure=None, ylim=None, rollW
         maxx = np.nanmax(valuesTSS)
         nRMSE = ((rmse/(maxx-minn))*100).round(2)
         
-
         for name, group in groups:
             plt.plot(group.doy, group.VI, marker='o',
                      linestyle='', ms=10, label=name)
         plt.plot(xnew, phen, '-', color='black')
-        # Show outliars if any
-        if len(outliars_id) != 0:
-            plt.plot(xarray.dim_0.values[outliars_id], xarray.values[outliars_id], marker='x',
-                     linestyle='', color='black')
-        plt.legend(prop={'size': 12})
-        plt.title('%RMSE = ' + str(nRMSE), loc='left', size=15)
+        plt.legend(prop={'size': legendsize})
+        plt.tick_params(labelsize=labelsize)
+        plt.title('%RMSE = ' + str(nRMSE), loc='left', size=titlesize)
         if ylim is not None:
             plt.ylim(ylim[0], ylim[1])
 
@@ -189,7 +162,7 @@ def PhenoPlot(X, Y, inData, dates, type='KDE', saveFigure=None, ylim=None, rollW
 # ---------------------------------------------------------------------------#
 
 
-def PhenoShape(inData, outData, dates, interpolType='KDE', nan_replace=None,
+def PhenoShape(inData, outData, doy, interpolType='KDE', nan_replace=None,
                rollWindow=None, nGS=46, n_jobs=4, chuckSize=256):
     """
     Process phenological shape of remote sensing data by
@@ -229,15 +202,14 @@ def PhenoShape(inData, outData, dates, interpolType='KDE', nan_replace=None,
     """
 
     # get names for output bands
-    doy = np.linspace(np.min(dates.dt.dayofyear), np.max(dates.dt.dayofyear),
-                      nGS, dtype='int16')
+    xnew = np.linspace(np.min(doy), np.max(doy), nGS, dtype='int16')
     bandNames = []
     for i in range(nGS):
-        bandNames.append('DOY - ' + str(doy[i]))
+        bandNames.append('DOY - ' + str(xnew[i]))
 
     # call _getPheno2 function to lcoal
-    do_work = partial(_getPheno2, dates=dates, nGS=nGS, rollWindow=rollWindow,
-                      nan_replace=nan_replace, type=interpolType)
+    do_work = partial(_getPheno2, doy=doy, interpolType=interpolType, 
+                      nan_replace=nan_replace, rollWindow=rollWindow, nGS=nGS)
 
     # apply PhenoShape with parallel processing
     try:
@@ -527,8 +499,38 @@ def _getPheno(y, x, nGS, type):
 
 # ---------------------------------------------------------------------------#
 
+def _getPheno0(y, doy, interpolType='KDE', nan_replace=None, rollWindow=None, nGS=46):
+ 
+    # replace nan_relace values by NaN
+    if nan_replace is not None:
+        y = np.where(y == nan_replace, np.nan, y)
+  
+    # sort values by DOY  
+    idx = doy.argsort()
+    y = y[idx]     
+    
+    # prepare tails for interpolation
+    minn = np.nanmin(y)
+    start = y[0:3]
+    end = y[-3:]
+    if np.all( np.isnan(start) ):
+        y[0:3] = minn
+    if np.all( np.isnan(end) ):
+        y[-3:] = minn
 
-def _getPheno2(dstack, dates, nGS, rollWindow, nan_replace, type):
+    # get phenological shape
+    phen = _getPheno(y, doy[idx], nGS, interpolType)
+    
+    # rolling average using moving window
+    if rollWindow is not None:
+        phen = _moving_average(phen, rollWindow)
+    
+    return phen
+
+
+# ---------------------------------------------------------------------------#
+
+def _getPheno2(dstack, doy, interpolType, nan_replace, rollWindow, nGS):
     """
     Obtain shape of phenological responses
 
@@ -536,35 +538,12 @@ def _getPheno2(dstack, dates, nGS, rollWindow, nan_replace, type):
     ----------
     - dstack: 3D arrays
 
-    """
-    # Transform numpy array to xarray
-    xarray = xr.DataArray(dstack)
-    xarray.coords['dim_0'] = dates.dt.dayofyear
-    # xarray.coords['doy'] = xarray.dim_0.dt.dayofyear
+    """    
 
-    # sort basds according to day-of-the-year
-    xarray = xarray.sortby('dim_0')
-    # rearrange time dimension for smoothing and interpolation
-    # xarray['dim_0'].values = xarray['doy']
-
-    # turn a value to NaN
-    if nan_replace is not None:
-        xarray = xarray.where(xarray.values != nan_replace)
-        # xarray.values = np.apply_along_axis(_fillNaN, 0, xarray.values)
-    # rolling average using moving window    # rolling average using moving window
-    if rollWindow is not None:
-        start = xarray.values[0:2]
-        end = xarray.values[-2:]
-        xarray = xarray.rolling(dim_0=rollWindow, center=True).mean()
-        xarray.values[0:2] = start
-        xarray.values[-2:] = end
-        # xarray.values =  np.apply_along_axis(_fillNaN, 0, xarray.values)
-    # prepare inputs to getPheno
-    x = xarray.dim_0.values
-    y = xarray.values
-    #  y = y[:,0,0]
     # get phenology shape accross the time axis
-    return np.apply_along_axis(_getPheno, 0, y, x, nGS, type)
+    return np.apply_along_axis(_getPheno0, 0, dstack, doy, interpolType, 
+                               nan_replace, rollWindow, nGS)
+
 
 # ---------------------------------------------------------------------------#
 
@@ -887,7 +866,7 @@ def _replaceElements(arr):
 
 def _fillNaN(x):
     # Fill NaN data by linear interpolation
-    mask = np.isnan(x)
+    mask = np.isnan(x) 
     x[mask] = np.interp(np.flatnonzero(mask), np.flatnonzero(~mask), x[~mask])
     return x
 
@@ -919,19 +898,10 @@ def _KDE(x, y, nGS):
 
     return y_pred
 
-# algorithm for outliar detection
+# ---------------------------------------------------------------------------#
+    
+def _moving_average(a, n=3) :
+    out = np.convolve(a, np.ones(n), 'valid') / n    
+    return np.concatenate([ a[:np.int(n/2)], out, a[-np.int(n/2):] ]) # add values of tail
 
-
-def _getOutliars(xnew, phen, x, y, threshold=500):
-
-    # create geometry objects
-    line = geom.LineString(tuple(zip(xnew, phen)))
-    points = geom.MultiPoint(tuple(zip(x, y)))
-    # get distances between the fitted line and the observed points
-    dist = []
-    for i in range(y.shape[0]):
-        dist.append(line.distance(points[i]))
-
-    dist = pd.DataFrame(dist)
-
-    return dist.loc[dist[0] > threshold].index.values
+# ---------------------------------------------------------------------------#
