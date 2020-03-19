@@ -91,7 +91,10 @@ def PhenoPlot(X, Y, inData, dates, type='KDE', saveFigure=None, ylim=None, rollW
 
     if nan_replace is not None:
         valuesTSS = np.where(valuesTSS == nan_replace, np.nan, valuesTSS)
-
+        
+    if correctionValue is not None:
+        valuesTSS = valuesTSS/correctionValue
+    
     # add dates
     valuesTSSpd = pd.concat([pd.DataFrame(dates),
                              pd.DataFrame(dates.dt.dayofyear),
@@ -104,9 +107,8 @@ def PhenoPlot(X, Y, inData, dates, type='KDE', saveFigure=None, ylim=None, rollW
     groups = valuesTSSpd.groupby('year')
 
     # get phenological shape
-    phen = _getPheno0(y=valuesTSS, DOY=dates.dt.dayofyear, interpolType=type, 
-                       correctionValue=correctionValue, nan_replace=None,
-                       rollWindow=rollWindow, nGS=nGS)
+    phen = _getPheno0(y=valuesTSS, doy=dates.dt.dayofyear, interpolType=type, 
+                       nan_replace=None, rollWindow=rollWindow, nGS=nGS)
 
     # doy of the predicted phenological shape
     xnew = np.linspace(np.min(valuesTSSpd.doy), np.max(valuesTSSpd.doy), nGS,
@@ -499,7 +501,7 @@ def _getPheno(y, x, nGS, type):
 
 # ---------------------------------------------------------------------------#
 
-def _getPheno0(y, doy, interpolType='KDE', nan_replace=None, rollWindow=None, nGS=46):
+def _getPheno0(y, doy, interpolType, nan_replace, rollWindow, nGS):
  
     # replace nan_relace values by NaN
     if nan_replace is not None:
@@ -510,6 +512,7 @@ def _getPheno0(y, doy, interpolType='KDE', nan_replace=None, rollWindow=None, nG
     y = y[idx]     
     
     # prepare tails for interpolation
+    '''
     minn = np.nanmin(y)
     start = y[0:3]
     end = y[-3:]
@@ -517,7 +520,7 @@ def _getPheno0(y, doy, interpolType='KDE', nan_replace=None, rollWindow=None, nG
         y[0:3] = minn
     if np.all( np.isnan(end) ):
         y[-3:] = minn
-
+    '''
     # get phenological shape
     phen = _getPheno(y, doy[idx], nGS, interpolType)
     
