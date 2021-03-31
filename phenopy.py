@@ -187,7 +187,7 @@ def PhenoShape(inData, outData, doy, interpolType='KDE', nan_replace=None,
         ‘next’ simply return the previous or next value of the point.
          Integer numbers specify the order of the spline interpolator to use.
          Default is ‘linear’.
-    - dates: 1D pandas file
+    - doy: 1D vector with day of the year data
         Dates of the original timeseries data [dtype: datetime64[ns]]
     - nan_replace: Integer
         Value of the NaN data if there are any
