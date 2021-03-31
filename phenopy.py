@@ -65,8 +65,10 @@ def PhenoPlot(X, Y, inData, dates, type='KDE', saveFigure=None, ylim=None, rollW
             Limits of the Y axis [default the y min() and max() values]
     - plotType: Type of plot, where 1 = plot with accumulated years; 2 = plot with
             start of the season (SOS), peak of the season (POS) and end of
-            season (EOS); and 3 = KDE plot
+            season (EOS);
             default is 1
+    - phenType: Type os estimation of SOS and EOS. 1 = median value between POS and start and end of season. 2 = using the knee inflexion method.
+            default 1
     - rollWindow: Integers
             Value of avarage smoothing of linear trend [default None]
     - nGS: Integer
@@ -241,6 +243,8 @@ def PhenoLSP(inData, outData, doy, nGS=46, phentype=1, n_phen=10, n_jobs=4,
     - nGS: Integer
         Number of observations to predict the PhenoShape
         default is 46; one per week
+     - phenType: Type os estimation of SOS and EOS. 1 = median value between POS and start and end of season. 2 = using the knee inflexion method.
+            default 1
     - n_phen: Integer
         Window size where to estimate SOS and EOS
     - n_jobs: Integer
