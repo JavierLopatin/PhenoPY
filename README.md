@@ -68,32 +68,60 @@ This is only for visualization. A raster of fitted lines per pixel can be achiev
 
 ``` python
 
-phen.PhenoShape(inData=inData, outData=outData, dates=dates,
-    nan_replace=-32767, nGS=46, chuckSize=256, n_jobs=4)
+phen.PhenoShape(inData=inData, outData=outData, doy=doy, rollWindow=5,
+                nan_replace=-32767, nGS=46, chuckSize=256, n_jobs=4)
 
 ```
-where `nan_replace` is the NaN value (default None), `nGS` is the munber of interpolation values to use (here we obtained one avarage value per week, hence = 46), `chuckSize` is the size of the chunck that rasterio will open at the time, and `n_jobs` is the number of parallel process to use. We used rasterio to open big images in small-sized chuncks and therefore keep the memory usage low.
+    100%|██████████| 42/42 [00:03<00:00, 13.59it/s]
+
+
+where `nan_replace` is the NaN value (default None), `nGS` is the munber of interpolation values to use (here we obtained one avarage value per week, hence = 46), `chuckSize` is the size of the chunck that rasterio will open at the time, and `n_jobs` is the number of parallel process to use. We used rasterio to open big images in small-sized chuncks and therefore keep the memory usage low. See example tile below:
+
+
+![alt text](data/example_phenoshape.png)
+
 
 Meanwhile, a raster of Land Surface Phenology (LSP) metrics can be obtained as:
 
 ``` python
-
-phen.PhenoLSP(inData=inData, outData=outData, nGS=46,
-  n_jobs=4, chuckSize=256)
-
+phen.PhenoLSP(inData=outData, outData=outData[:-4] + '_LSP2.tif', doy=doy, phentype=2,
+              nGS=46, n_jobs=4, chuckSize=256)
 ```
-
+   100%|██████████| 8924/8924 [00:01<00:00, 7048.13it/s]
+   
 Until now, the metrics included are:
 
-- SOS - DOY of start of season
-- POS - DOY of peak of season
-- EOS - DOY of end of season
-- vSOS - Value at start of season
-- vPOS - Value at peak of season
-- vEOS - Value at end of season
-- LOS - Length of season (DOY)
-- AOS - Amplitude of season (in value units)
-- IOS - Integral of season (SOS-EOS)
-- ROG - Rate of greening [slope SOS-POS]
-- ROS - Rate of senescence [slope POS-EOS]
-- SW - Skewness of greening period
+SOS - DOY of Start of season
+POS - DOY of Peak of season
+EOS - DOY of End of season
+vSOS - Vaues at start os season
+vPOS - Values at peak of season
+vEOS - Values at end of season
+LOS - Length of season
+MSP - Mid spring (DOY)
+MAU - Mid autum (DOY)
+vMSP - Value at mean spring
+vMAU - Value at mean autum
+AOS - Amplitude of season
+IOS - Integral of season [SOS-EOS]
+ROG - Rate of greening [slope SOS-POS]
+ROS - Rate of senescence [slope POS-EOS]
+SW - Skewness of growing season [SOS-EOS]
+
+Finally, the library has a estimation of the interannual variation of data, using normalized RMSE values:
+
+```python
+# get RMSE between the fitted phenoshape and the real distribution of values
+phen.RMSE(inData, outData, outData[:-4] + '_RMSE.tif', dates)
+```
+
+    100%|██████████| 8924/8924 [00:01<00:00, 7048.13it/s]
+
+![png](data/output_14_1.png)
+
+TODO:
+
+Add implementation of a segmented nRMSE estimations, where error estimates (i.e., interanual variation) is estimated per segment. Example:
+
+
+![png](data/Fig_Segmented_nRMSE.png)
