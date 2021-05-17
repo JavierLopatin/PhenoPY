@@ -124,4 +124,4 @@ TODO:
 Add implementation of a segmented nRMSE estimations, where error estimates (i.e., interanual variation) is estimated per segment. Example:
 
 
-![png](data/Fig_Segmented_nRMSE.png)
+![png](data/Fig_Segmented_nRMSE.jpg)
