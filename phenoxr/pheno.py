@@ -47,12 +47,12 @@ def _getLSPmetrics2(phen, xnew, nGS, num, phentype):
     else:
         # basic variables
         vpos = np.max(phen)
-        pos = xnew[ipos]
         trough = np.min(phen)
         ampl = vpos - trough
 
         # get position of seasonal peak and trough
         ipos = np.where(phen == vpos)[0]
+        pos = xnew[ipos]
 
         # scale annual time series to 0-1
         ratio = (phen - trough) / ampl
@@ -99,8 +99,7 @@ def _getLSPmetrics2(phen, xnew, nGS, num, phentype):
         # los: length of season
         los = eos - sos
         if los < 0:
-            los[los < 0] = len(phen) + \
-                (eos[los < 0] - sos[los < 0])
+            los = np.nan
 
         # get MSP, MAU (independent from SOS and EOS)
         
@@ -118,23 +117,25 @@ def _getLSPmetrics2(phen, xnew, nGS, num, phentype):
 
         # doy of growing season
         green = xnew[(xnew > sos) & (xnew < eos)]
-        id = []
+        id_ = []
         for i in range(len(green)):
-            id.append((xnew == green[i]).nonzero()[0])
+            id_.append((xnew == green[i]).nonzero()[0])   
+        # TODO: move id_ generation to a list comprehension = id_ = [(xnew == green[i]).nonzero()[0] for i in range(len(green))]
+        
         # index of growing season
-        id = np.array([item for sublist in id for item in sublist])
+        id = np.array([item for sublist in id_ for item in sublist])
 
         # get intergral of green season
-        ios = trapz(phen[id], xnew[id])
+        ios = trapz(phen[id], xnew[id]) if len(id) > 0 else np.nan
+        
+        # skewness of growing season
+        sw = skew(phen[id]) if len(id) > 0 else np.nan
 
         # rate of greening [slope SOS-POS]
         rog = (vpos - phen[isos]) / (pos - sos)
 
         # rate of senescence [slope POS-EOS]
         ros = (phen[ieos] - vpos) / (eos - pos)
-
-        # skewness of growing season
-        sw = skew(phen[id])
 
         metrics = np.array((sos, pos[0], eos, phen[isos][0], vpos,
                             phen[ieos][0], los, msp, mau, vmsp, vmau, ampl, ios, rog[0],
