@@ -4,10 +4,13 @@
 %autoreload 2
 import datacube
 import numpy as np
+import sys
 import xarray as xr
 from datacube.utils.masking import make_mask, mask_invalid_data, describe_variable_flags
 from datacube.utils.rio import configure_s3_access
 from dask.distributed import Client
+
+sys.path.append('../')
 from phenoxr.phenoXr import Pheno
 
 # client = Client()
