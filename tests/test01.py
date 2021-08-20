@@ -8,8 +8,7 @@ import xarray as xr
 from datacube.utils.masking import make_mask, mask_invalid_data, describe_variable_flags
 from datacube.utils.rio import configure_s3_access
 from dask.distributed import Client
-from phenopy_DC import _getPheno0, _getPheno2
-from phenoDCC import Pheno
+from phenoxr.phenoXr import Pheno
 
 # client = Client()
 # configure_s3_access(aws_unsigned=False, requester_pays=True, client=client)
