@@ -1,7 +1,7 @@
 import numpy as np
 import xarray as xr
-from ..phenopy import _getPheno0
-from phenoXr import _getLSPmetrics2
+from phenopy import _getPheno0
+from phenoxr.pheno import _getLSPmetrics2
 
 def _getPheno2D(dstack, doy, interpolType, nan_replace, rollWindow, nGS, xnew=None):
     # dstack.doy
