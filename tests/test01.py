@@ -64,6 +64,7 @@ ans = ndvi.pheno.computePheno()
 
 #
 ans2 = ans.pheno.computePhenoLSP().persist()
+ans2.values
 
 
 if False:

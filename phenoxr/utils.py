@@ -31,8 +31,8 @@ def _parseLSP(dstack, xnew, nGS, num, phentype):
     coords_ = {'time': range(1, 17), # TODO: transform to bands?? remove hardcoded
               'y': dstack['y'],
               'x': dstack['x']}
+    # TODO: transform to Dataset instead of DataArray?
     ans_ = xr.DataArray(ans, 
                         coords=coords_, 
                         dims=dstack.dims)
-    print(ans.shape)
-    return ans
+    return ans_
