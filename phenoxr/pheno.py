@@ -1,4 +1,5 @@
 import numpy as np
+from kneed import KneeLocator
 from scipy.integrate import trapz
 from scipy.interpolate import Rbf, interp1d
 from scipy.stats import skew
@@ -72,7 +73,6 @@ def _getLSPmetrics2(phen, xnew, nGS, num, phentype):
             isos = np.where(xnew == int(sos))[0]
             ieos = np.where(xnew == eos)[0]
         elif phentype == 2:  # estimate SOS and EOS by inflection curves
-            warnings.simplefilter("ignore")
             # consider only observation before POS for SOS
             knee1 = KneeLocator(xnew[0:ipos[0]], ratio[0:ipos[0]], S=2,
                                 curve='convex', direction='increasing')
@@ -120,7 +120,7 @@ def _getLSPmetrics2(phen, xnew, nGS, num, phentype):
         id_ = []
         for i in range(len(green)):
             id_.append((xnew == green[i]).nonzero()[0])   
-        # TODO: move id_ generation to a list comprehension = id_ = [(xnew == green[i]).nonzero()[0] for i in range(len(green))]
+        # TODO: move id_ generation to a list comprehension -> id_ = [(xnew == green[i]).nonzero()[0] for i in range(len(green))]
         
         # index of growing season
         id = np.array([item for sublist in id_ for item in sublist])

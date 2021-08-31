@@ -108,16 +108,16 @@ class Pheno:
         stack = self._obj
         xnew = self.kwargs['computePheno']['xnew']
         time_chunk = [i for i in stack.chunks]
-        time_chunk[0] = 16
+        time_chunk[0] = n_
         if nGS is None:
             nGS = self.kwargs['computePheno']['nGS']
         
         kwargs_ = {'xnew': xnew, 'nGS': nGS, 'num': n_, 'phentype': phentype}
         
-        coords_ = {'time': range(1, n_+ 1), # TODO: transform to bands??
+        coords_ = {'time': range(1, n_+ 1),
                    'y': stack.coords['y'],
                    'x': stack.coords['x']}
-        template_ = xr.DataArray(np.zeros((16, len(stack.y), len(stack.x))), 
+        template_ = xr.DataArray(np.zeros((n_, len(stack.y), len(stack.x))), 
                                  coords=coords_,
                                  dims = ['time', 'y', 'x']).chunk(time_chunk)
             
