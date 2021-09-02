@@ -20,7 +20,7 @@ class Pheno:
         :param args: extra arguments passed to _getPheno2D
         :param kwargs: extra arguments passed to _getPheno2D
         """
-        return data, template
+        pass  # return data, template
     
     def computeChunkSize(self, sizeMB=100, Z='time'):
         """
@@ -39,8 +39,8 @@ class Pheno:
             chunk = dict(zip(self._obj.dims, shape))
         return chunk
 
-    def computePheno(self, doy=None, interpolType='linear', nan_replace=None,
-                    rollWindow=5, nGS=52):
+    def PhenoShape(self, doy=None, interpolType='linear', nan_replace=None,
+                   rollWindow=5, nGS=52):
         """
         Apply the _getPheno2D/_getPheno2 function to a xarray.DataArray object. It calculates all the necessary auxiliary objects in order to use Dask functionality (trough map_blocks).
         
@@ -57,6 +57,7 @@ class Pheno:
             doy = stack.time.dt.dayofyear.values
         # replicating what happens in _getPheno xnew definition
         xnew = np.linspace(np.min(doy), np.max(doy), nGS, dtype='int16')
+        # TODO: change hemisfere, start doy at the desired day (1 north, 182 south) and keep record about the original doy
         
         # TODO: define a function to auto calculate next chunk (to ~100MB each chunk)
         time_chunk = {'x': 10, 'y': 10, 'time': len(stack.time)}
@@ -78,11 +79,8 @@ class Pheno:
         
         return stackP
     
-    def computePhenoLSP(self, nGS=None, phentype=1):
-        # TODO: modificar PhenoLSP para trabajar con esta salida y generar una salida total (sin tiempo), de diferentes bandas
-#         def PhenoLSP(inData, outData, doy, nGS=46, phentype=1, n_phen=10, n_jobs=4,
-#              chuckSize=256):
-#       it seems n_phen is not used
+    def PhenoLSP(self, nGS=None, phentype=1):
+        # it seems n_phen is not used
         """
         Obtain land surfurface phenology metrics for a PhenoShape product
 
@@ -120,10 +118,17 @@ class Pheno:
         template_ = xr.DataArray(np.zeros((n_, len(stack.y), len(stack.x))), 
                                  coords=coords_,
                                  dims = ['time', 'y', 'x']).chunk(time_chunk)
-            
+        
+        # TODO: return a Dataset instead of DataArray
         stackP = stack.map_blocks(_parseLSP, kwargs=kwargs_, template=template_)
         stackP.pheno.kwargs['computePhenoLSP'] = kwargs_
 
         return stackP
     
+    def RMSE(self):
+        # TODO: implement. Works with original_data and PhenoShape output
+        pass
     
+    def PhenoPlot(self):
+        # TODO: original data vs PhenoShape, coordinates or position as input to plot [option to use ipyleaflet to select a point or another kind of interaction]
+        pass

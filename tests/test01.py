@@ -60,10 +60,10 @@ dsf.update(dsf * 0.0000275 + -0.2)
 ndvi = ((dsf.nir - dsf.red) / (dsf.nir + dsf.red)).persist()
 
 # 3D application
-ans = ndvi.pheno.computePheno()
+ans = ndvi.pheno.PhenoShape()
 
 #
-ans2 = ans.pheno.computePhenoLSP().persist()
+ans2 = ans.pheno.PhenoLSP().persist()
 ans2.values
 
 
