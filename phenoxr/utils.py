@@ -14,20 +14,20 @@ def _getPheno2D(dstack, doy, interpolType, nan_replace, rollWindow, nGS, xnew=No
     if xnew is None:
         xnew = range(1, nGS + 1)
         
-    return _assemble(ans, dstack, xnew, True)
+    return _assemble(ans, dstack, {'time': xnew}, True)
     
 
-def _parseLSP(dstack, xnew, nGS, num, phentype):
+def _parseLSP(dstack, xnew, nGS, bands, phentype):
     # num=len(bandNames) = 16
-    ans = np.apply_along_axis(_getLSPmetrics2, 0, dstack, xnew, nGS, num, phentype)
+    ans = np.apply_along_axis(_getLSPmetrics2, 0, dstack, xnew, nGS, bands, phentype)
     
-    return _assemble(ans, dstack, range(1, num+1), True)
+    return _assemble(ans, dstack, {'doy': bands}, True)
 
 
 def _assemble(computed_data, original_stack, z_values, asDataArray=True):
-    coords_ = {'time': z_values,
-              'y': original_stack['y'],
-              'x': original_stack['x']}
+    coords_ = z_values
+    coords_['y'] = original_stack['y']
+    coords_['x'] = original_stack['x']
     
     if asDataArray:
         out = xr.DataArray(computed_data, 

@@ -11,12 +11,15 @@ class Pheno:
     def __init__(self, xr_obj):
         self._obj = xr_obj
         self.kwargs = {}
+        self.LSP_bands = ['sos', 'pos', 'eos', 'phen', 'vpos', 
+                          'phen', 'los', 'msp', 'mau', 'vmsp', 
+                          'vmau', 'ampl', 'ios', 'rog', 'ros', 'sw']
     
     def prepare_data(self, dimensions=['x', 'y', 'time'], *args, **kwargs):
         """
         TODO: PENDING!
         :param stack: must be a DataArray objetc (one variable only)
-        :param dimensions: a list indicating the name of the X, Y, and Z dimension. Z being usually time.
+        :param dimensions: a list indicating the name of the X, Y, and time dimensiones.
         :param args: extra arguments passed to _getPheno2D
         :param kwargs: extra arguments passed to _getPheno2D
         """
@@ -57,7 +60,7 @@ class Pheno:
             doy = stack.time.dt.dayofyear.values
         # replicating what happens in _getPheno xnew definition
         xnew = np.linspace(np.min(doy), np.max(doy), nGS, dtype='int16')
-        # TODO: change hemisfere, start doy at the desired day (1 north, 182 south) and keep record about the original doy
+        # TODO: change hemisfere, start doy at the desired day (1 north, 182 south) and keep record about the original doy -> dos (day of season)
         
         # TODO: define a function to auto calculate next chunk (to ~100MB each chunk)
         time_chunk = {'x': 10, 'y': 10, 'time': len(stack.time)}
@@ -74,7 +77,7 @@ class Pheno:
                    'nan_replace': nan_replace, 'rollWindow': rollWindow, 
                    'nGS': nGS, 'xnew': xnew}
         
-        stackP = stack.map_blocks(_getPheno2D, kwargs=kwargs_, template=template_)
+        stackP = stack.map_blocks(_getPheno2D, kwargs=kwargs_, template=template_).rename({'time': 'doy'})
         stackP.pheno.kwargs['computePheno'] = kwargs_
         
         return stackP
@@ -82,7 +85,7 @@ class Pheno:
     def PhenoLSP(self, nGS=None, phentype=1):
         # it seems n_phen is not used
         """
-        Obtain land surfurface phenology metrics for a PhenoShape product
+        Obtain land surface phenology metrics for a PhenoShape product
 
         Parameters
         ----------
@@ -102,7 +105,7 @@ class Pheno:
         if 'computePheno' not in self.kwargs:
             raise('No Pheno computed')  # TODO: replace with auto-compute
         
-        n_ = 16  # TODO: replace with auto-compute or user input
+        n_ = len(self.LSP_bands)
         stack = self._obj
         xnew = self.kwargs['computePheno']['xnew']
         time_chunk = [i for i in stack.chunks]
@@ -110,17 +113,17 @@ class Pheno:
         if nGS is None:
             nGS = self.kwargs['computePheno']['nGS']
         
-        kwargs_ = {'xnew': xnew, 'nGS': nGS, 'num': n_, 'phentype': phentype}
+        kwargs_ = {'xnew': xnew, 'nGS': nGS, 'bands': self.LSP_bands, 'phentype': phentype}
         
-        coords_ = {'time': range(1, n_+ 1),
+        coords_ = {'doy': self.LSP_bands,
                    'y': stack.coords['y'],
                    'x': stack.coords['x']}
         template_ = xr.DataArray(np.zeros((n_, len(stack.y), len(stack.x))), 
                                  coords=coords_,
-                                 dims = ['time', 'y', 'x']).chunk(time_chunk)
+                                 dims = ['doy', 'y', 'x']).chunk(time_chunk)
         
         # TODO: return a Dataset instead of DataArray
-        stackP = stack.map_blocks(_parseLSP, kwargs=kwargs_, template=template_)
+        stackP = stack.map_blocks(_parseLSP, kwargs=kwargs_, template=template_).rename({'doy': 'LSP_bands'})
         stackP.pheno.kwargs['computePhenoLSP'] = kwargs_
 
         return stackP

@@ -7,7 +7,7 @@ from scipy.stats import skew
 from sklearn.metrics import mean_squared_error
 
 
-def _getLSPmetrics2(phen, xnew, nGS, num, phentype):
+def _getLSPmetrics2(phen, xnew, nGS, bands, phentype):
     """
     Obtain land surfurface phenology metrics
 
@@ -19,8 +19,8 @@ def _getLSPmetrics2(phen, xnew, nGS, num, phentype):
         DOY values for PhenoShape data
     - n_phen: Integer
         Window size where to estimate SOS and EOS
-    - num: Integer
-        Number of output variables
+    - bands: string list
+        Name of the output bands (soft requirement)
 
     Outputs
     -------
@@ -45,7 +45,7 @@ def _getLSPmetrics2(phen, xnew, nGS, num, phentype):
     """
     inds = np.isnan(phen)  # check if array has NaN values
     if inds.any():  # check is all values are NaN
-        return np.repeat(np.nan, num)
+        return np.repeat(np.nan, len(bands))
     else:
         # basic variables
         vpos = np.max(phen)

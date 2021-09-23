@@ -27,8 +27,8 @@ import shapely.geometry as geom      # create geographical points
 import rasterio                      # manipulate GeoTIFF
 from rasterstats import point_query  # extract raster values
 from tqdm import tqdm                # progress bar
-from kneed import KneeLocator        # find inflection point on a curve
-from KDEpy import FFTKDE             # perform fast 2D kernel density estimations
+# from kneed import KneeLocator        # find inflection point on a curve
+# from KDEpy import FFTKDE             # perform fast 2D kernel density estimations
 
 
 # --------------------------------------------------------------------------- #

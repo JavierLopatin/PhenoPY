@@ -22,8 +22,7 @@ dc.list_products().name
 
 veg_proxy = 'NDVI'
 dates = ('2018-01-01', '2020-12-31')
-inProduct = 'usgs_aws_ls8c2_sr'
-collection = 'c1' # 'c1' (for USGS Collection 1);'c2' (for USGS Collection 2) and 's2' (for Sentinel-2)
+inProduct = 'landsat8_c2l2_sr'
 resolution = 30
 central_lat, central_lon = -35.979288, -72.598012
 buffer = 0.005
@@ -49,15 +48,15 @@ ds = dc.load(
 #                    year=ds.time.dt.year))
 
 doy=ds.time.dt.dayofyear.values
-reflectance_names = ["coastal_aerosol", "blue", "green", "red", "nir", "swir1", "swir2"]
+reflectance_names = ["coastal", "blue", "green", "red", "nir08", "swir16", "swir22"]
 
-mask_cloud = make_mask(ds.pixel_qa, cloud='not_high_confidence', cloud_shadow='not_high_confidence', nodata=False) # genera máscara de nubes e inválidos (landsat aws)
-mask_sat = ds.radsat_qa == 0 # pixeles no saturados
+mask_cloud = make_mask(ds['qa_pixel'], cloud='not_high_confidence', cloud_shadow='not_high_confidence', nodata=False) # genera máscara de nubes e inválidos (landsat aws)
+mask_sat = ds['qa_radsat'] == 0 # pixeles no saturados
 dsf = ds[reflectance_names].where(mask_cloud & mask_sat) 
 dsf.update(dsf.where((dsf >= 1) & (dsf <= 65455), np.nan))
 dsf.update(dsf * 0.0000275 + -0.2)
 
-ndvi = ((dsf.nir - dsf.red) / (dsf.nir + dsf.red)).persist()
+ndvi = ((dsf.nir08 - dsf.red) / (dsf.nir08 + dsf.red)).persist()
 
 # 3D application
 ans = ndvi.pheno.PhenoShape()
