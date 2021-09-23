@@ -1,5 +1,6 @@
 import numpy as np
-from kneed import KneeLocator
+import warnings
+# from kneed import KneeLocator # (for phenotype == 2, deprecated
 from scipy.integrate import trapz
 from scipy.interpolate import Rbf, interp1d
 from scipy.stats import skew
@@ -65,28 +66,30 @@ def _getLSPmetrics2(phen, xnew, nGS, num, phentype):
 
         # select time where SOS and EOS are located (around trs value)
         # KneeLocator looks for the inflection index in the curve
-        if phentype == 1:  # estimate SOS and EOS as median of the season
+        if phentype in [1, 2]:  # estimate SOS and EOS as median of the season
+            if phentype == 2:
+                warnings.warn("Type 2 is currently not implemented", DeprecationWarning)
             i = np.median(xnew[:ipos[0]][greenup[:ipos[0]]])
             ii = np.median(xnew[ipos[0]:][~greenup[ipos[0]:]])
             sos = xnew[(np.abs(xnew - i)).argmin()]
             eos = xnew[(np.abs(xnew - ii)).argmin()]
             isos = np.where(xnew == int(sos))[0]
             ieos = np.where(xnew == eos)[0]
-        elif phentype == 2:  # estimate SOS and EOS by inflection curves
-            # consider only observation before POS for SOS
-            knee1 = KneeLocator(xnew[0:ipos[0]], ratio[0:ipos[0]], S=2,
-                                curve='convex', direction='increasing')
-            sos = knee1.knee
-            isos = np.where(xnew == knee1.knee)[0]
+#         elif phentype == 2:  # estimate SOS and EOS by inflection curves
+#             #-- consider only observation before POS for SOS
+#             knee1 = KneeLocator(xnew[0:ipos[0]], ratio[0:ipos[0]], S=2,
+#                                 curve='convex', direction='increasing')
+#             sos = knee1.knee
+#             isos = np.where(xnew == knee1.knee)[0]
 
-            # consider only observation after POS for EOS
-            x = xnew[-(nGS - ipos[0] - 1):]
-            y = ratio[-(nGS - ipos[0] - 1):]
-            knee2 = KneeLocator(range(len(x)), np.flip(y), S=2,
-                                curve='convex', direction='increasing')
-            eos = x[np.where(
-                np.flip(range(len(x))) == knee2.knee)[0]][0]
-            ieos = np.where(xnew == eos)[0]
+#             #-- consider only observation after POS for EOS
+#             x = xnew[-(nGS - ipos[0] - 1):]
+#             y = ratio[-(nGS - ipos[0] - 1):]
+#             knee2 = KneeLocator(range(len(x)), np.flip(y), S=2,
+#                                 curve='convex', direction='increasing')
+#             eos = x[np.where(
+#                 np.flip(range(len(x))) == knee2.knee)[0]][0]
+#             ieos = np.where(xnew == eos)[0]
         else:
             print('phentype must be either 1 or 2')
         if sos is None:
