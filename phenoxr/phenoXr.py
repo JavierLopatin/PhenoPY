@@ -11,8 +11,8 @@ class Pheno:
     def __init__(self, xr_obj):
         self._obj = xr_obj
         self.kwargs = {}
-        self.LSP_bands = ['sos', 'pos', 'eos', 'phen', 'vpos', 
-                          'phen', 'los', 'msp', 'mau', 'vmsp', 
+        self.LSP_bands = ['sos', 'pos', 'eos', 'vsos', 'vpos', 
+                          'veos', 'los', 'msp', 'mau', 'vmsp', 
                           'vmau', 'ampl', 'ios', 'rog', 'ros', 'sw']
     
     def prepare_data(self, dimensions=['x', 'y', 'time'], *args, **kwargs):
@@ -126,7 +126,7 @@ class Pheno:
         stackP = stack.map_blocks(_parseLSP, kwargs=kwargs_, template=template_).rename({'doy': 'LSP_bands'})
         stackP.pheno.kwargs['computePhenoLSP'] = kwargs_
 
-        return stackP
+        return stackP.to_dataset('LSP_bands')
     
     def RMSE(self):
         # TODO: implement. Works with original_data and PhenoShape output
