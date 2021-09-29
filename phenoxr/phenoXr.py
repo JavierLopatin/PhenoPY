@@ -128,29 +128,37 @@ class Pheno:
         return stackP.to_dataset('LSP_bands')
     
     def RMSE(self, original_stack, normalized=False, nan_replace=None, interpolate_nans=False):
-        # TODO: implement. Works with original_data and PhenoShape output
-        # original_stack = inData = dstack
-        phen = self._obj # inShape, phen
+        """
+        Calculate the RMSE of the PhenoShape estimation
+        
+        :param original_stack: initial image stack, from which the phenoShape was calculated.
+        :param normalized: boolean, if True RMSE will be scaled to [0, 1]
+        :param nan_replace: what to do with NaNs
+        :param interpolate_nans: boolean, should NaNs values be interpolated?
+        
+        :returns: computed xarray.DataArray with the RMSE
+        """
+        phen = self._obj # inShape, phen  || # original_stack = inData = dstack
+        
         # 1. Check if I'm PhenoShape data
-        # 
         if 'computePheno' not in self.kwargs:
             raise('It seems computePheno has not yet been computed...')
         
         if nan_replace is not None:
             original_stack = original_stack.where(original_stack.values != nan_replace)
         
-        # Get day of the year of original_stack and reorder by that
+        # 2. Get day of the year of original_stack and reorder by that
         doys = original_stack.time.dt.dayofyear.values
         original_stack = original_stack.assign_coords(time=doys)
         original_stack = original_stack.rename({'time': 'doy'}).sortby('doy')
         
-        # Linear interpolation for pheno, to match original_stack doys
+        # 3. Linear interpolation for pheno, to match original_stack doys
         if interpolate_nans:
             phen = phen.interpolate_na('doy')
             
         phen = phen.interp(doy=doys, method='linear')
         
-        # RMSE
+        # 4. RMSE
         rmse = (((original_stack - phen)**2).sum('doy', keep_attrs=True) / len(doys)) ** 1/2
         
         if normalized:

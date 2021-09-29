@@ -6,6 +6,7 @@ import datacube
 import numpy as np
 import sys
 import xarray as xr
+import matplotlib.pyplot as plt
 from datacube.utils.masking import make_mask, mask_invalid_data, describe_variable_flags
 from datacube.utils.rio import configure_s3_access
 from dask.distributed import Client
@@ -13,9 +14,9 @@ from dask.distributed import Client
 sys.path.append('../')
 from phenoxr.phenoXr import Pheno
 
-# client = Client()
-# configure_s3_access(aws_unsigned=False, requester_pays=True, client=client)
-configure_s3_access(aws_unsigned=False, requester_pays=True)
+client = Client()
+configure_s3_access(aws_unsigned=False, requester_pays=True, client=client)
+# configure_s3_access(aws_unsigned=False, requester_pays=True)
 
 dc = datacube.Datacube(app="Pheno_test")
 dc.list_products().name
@@ -25,7 +26,7 @@ dates = ('2018-01-01', '2020-12-31')
 inProduct = 'landsat8_c2l2_sr'
 resolution = 30
 central_lat, central_lon = -35.979288, -72.598012
-buffer = 0.005
+buffer = 0.03
 study_area_lat = (central_lat - buffer, central_lat + buffer)
 study_area_lon = (central_lon - buffer, central_lon + buffer)
 
@@ -58,14 +59,16 @@ dsf.update(dsf * 0.0000275 + -0.2)
 
 ndvi = ((dsf.nir08 - dsf.red) / (dsf.nir08 + dsf.red)).persist()
 
-# 3D application
+# PhenoShape
 ans = ndvi.pheno.PhenoShape()
+ans_rmse = ans.pheno.RMSE(ndvi).persist()
 
-#
+ans_rmse.plot(robust=True, figsize=(10, 8))
+
+# Pheno LSP
 ans2 = ans.pheno.PhenoLSP().persist()
 
-#
-rmse = ans.pheno.RMSE(ndvi).persist()
+
 
 
 if False:
