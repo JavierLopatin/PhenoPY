@@ -63,7 +63,9 @@ ans = ndvi.pheno.PhenoShape()
 
 #
 ans2 = ans.pheno.PhenoLSP().persist()
-ans2.values
+
+#
+rmse = ans.pheno.RMSE(ndvi).persist()
 
 
 if False:
@@ -79,3 +81,12 @@ if False:
                       interpolType='linear', nan_replace = None, rollWindow=5, nGS=52)
     ## --------------------------------------------------
 
+    da = xr.DataArray(
+        np.sin(0.3 * np.arange(12).reshape(4, 3)),
+        [("time", np.arange(4)), ("space", [0.1, 0.2, 0.3])],
+        )
+
+
+    da.sel(time=3)
+
+    da.interp(time=2.5)

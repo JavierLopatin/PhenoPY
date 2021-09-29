@@ -3,7 +3,7 @@ import xarray as xr
 from functools import reduce
 from phenoxr.pheno import _getLSPmetrics2
 from phenoxr.utils import _getPheno2D, _parseLSP
-from phenopy import _getPheno0
+from phenopy import _getPheno0, _RMSE
 
 
 @xr.register_dataarray_accessor("pheno")
@@ -122,15 +122,43 @@ class Pheno:
                                  coords=coords_,
                                  dims = ['doy', 'y', 'x']).chunk(time_chunk)
         
-        # TODO: return a Dataset instead of DataArray
         stackP = stack.map_blocks(_parseLSP, kwargs=kwargs_, template=template_).rename({'doy': 'LSP_bands'})
-        stackP.pheno.kwargs['computePhenoLSP'] = kwargs_
+        stackP.pheno.kwargs['computePhenoLSP'] = kwargs_  # this doesn't work, is not saved, pheno objet its lost in datadaset transformation
 
         return stackP.to_dataset('LSP_bands')
     
-    def RMSE(self):
+    def RMSE(self, original_stack, normalized=False, nan_replace=None, interpolate_nans=False):
         # TODO: implement. Works with original_data and PhenoShape output
-        pass
+        # original_stack = inData = dstack
+        phen = self._obj # inShape, phen
+        # 1. Check if I'm PhenoShape data
+        # 
+        if 'computePheno' not in self.kwargs:
+            raise('It seems computePheno has not yet been computed...')
+        
+        if nan_replace is not None:
+            original_stack = original_stack.where(original_stack.values != nan_replace)
+        
+        # Get day of the year of original_stack and reorder by that
+        doys = original_stack.time.dt.dayofyear.values
+        original_stack = original_stack.assign_coords(time=doys)
+        original_stack = original_stack.rename({'time': 'doy'}).sortby('doy')
+        
+        # Linear interpolation for pheno, to match original_stack doys
+        if interpolate_nans:
+            phen = phen.interpolate_na('doy')
+            
+        phen = phen.interp(doy=doys, method='linear')
+        
+        # RMSE
+        rmse = (((original_stack - phen)**2).sum('doy', keep_attrs=True) / len(doys)) ** 1/2
+        
+        if normalized:
+            minn = original_stack.min('doy', skipna=True)
+            maxx = original_stack.max('doy', skipna=True)
+            rmse = ((rmse/(maxx-minn))*100)
+        
+        return rmse
     
     def PhenoPlot(self):
         # TODO: original data vs PhenoShape, coordinates or position as input to plot [option to use ipyleaflet to select a point or another kind of interaction]
