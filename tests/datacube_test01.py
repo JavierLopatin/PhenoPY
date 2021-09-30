@@ -26,7 +26,7 @@ dates = ('2018-01-01', '2020-12-31')
 inProduct = 'landsat8_c2l2_sr'
 resolution = 30
 central_lat, central_lon = -35.979288, -72.598012
-buffer = 0.03
+buffer = 0.01
 study_area_lat = (central_lat - buffer, central_lat + buffer)
 study_area_lon = (central_lon - buffer, central_lon + buffer)
 
@@ -67,6 +67,8 @@ ans_rmse.plot(robust=True, figsize=(10, 8))
 
 # Pheno LSP
 ans2 = ans.pheno.PhenoLSP().persist()
+
+ans_rmse_c = ans.pheno.RMSE(ndvi, LSP_stack=ans2)
 
 
 

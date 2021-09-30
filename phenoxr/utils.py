@@ -37,3 +37,33 @@ def _assemble(computed_data, original_stack, z_values, asDataArray=True):
         pass
     
     return out
+
+
+def _rmse(computed_stack, original_stack, axis='doy', normalized=False):
+    # TODO: N should be the number of valid data or the length? should be the first one I think
+    N = len(computed_stack.coords[axis])
+    rmse = (((original_stack - computed_stack)**2).sum(axis, keep_attrs=True, skipna=True) / N) ** 1/2
+    if normalized:
+        minn = original_stack.min(axis, skipna=True)
+        maxx = original_stack.max(axis, skipna=True)
+        return rmse/(maxx-minn)
+    else:
+        return rmse
+
+
+def computeChunkSize(arr, sizeMB=100, Z='time'):
+    """
+    TODO: PENDING!
+    :param sizeMB: aprox desired chunk size in MB.
+    :param Z: name of the Z axis. By default, 'time'.
+    """
+    bmod = arr.dtype.itemsize
+    shape = arr.shape
+    if len(shape) != 3:
+        raise(f'DataArray dimensions should be 3, not {shape}')
+    total_sizeMB = reduce(lambda x, y: x*y, shape) / 1000**2 * bmod
+    if total_sizeMB >= sizeMB:
+        pass
+    else:
+        chunk = dict(zip(arr.dims, shape))
+    return chunk
