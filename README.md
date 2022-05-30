@@ -91,22 +91,22 @@ phen.PhenoLSP(inData=outData, outData=outData[:-4] + '_LSP2.tif', doy=doy, phent
    
 Until now, the metrics included are:
 
-SOS - DOY of Start of season
-POS - DOY of Peak of season
-EOS - DOY of End of season
-vSOS - Vaues at start os season
-vPOS - Values at peak of season
-vEOS - Values at end of season
-LOS - Length of season
-MSP - Mid spring (DOY)
-MAU - Mid autum (DOY)
-vMSP - Value at mean spring
-vMAU - Value at mean autum
-AOS - Amplitude of season
-IOS - Integral of season [SOS-EOS]
-ROG - Rate of greening [slope SOS-POS]
-ROS - Rate of senescence [slope POS-EOS]
-SW - Skewness of growing season [SOS-EOS]
+- SOS - DOY of Start of season
+- POS - DOY of Peak of season
+- EOS - DOY of End of season
+- vSOS - Vaues at start os season
+- vPOS - Values at peak of season
+- vEOS - Values at end of season
+- LOS - Length of season
+- MSP - Mid spring (DOY)
+- MAU - Mid autum (DOY)
+- vMSP - Value at mean spring
+- vMAU - Value at mean autum
+- AOS - Amplitude of season
+- IOS - Integral of season [SOS-EOS]
+- ROG - Rate of greening [slope SOS-POS]
+- ROS - Rate of senescence [slope POS-EOS]
+- SW - Skewness of growing season [SOS-EOS]
 
 Finally, the library has a estimation of the interannual variation of data, using normalized RMSE values:
 
