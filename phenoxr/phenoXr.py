@@ -2,7 +2,7 @@ import numpy as np
 import xarray as xr
 from functools import reduce
 from phenoxr.pheno import _getLSPmetrics2
-from phenoxr.utils import _getPheno2D, _parseLSP, _rmse
+from phenoxr.utils import _getPheno2D, _parseLSP, _rmse, computeChunkSize
 from phenopy import _getPheno0
 
 
@@ -15,16 +15,17 @@ class Pheno:
                           'veos', 'los', 'msp', 'mau', 'vmsp', 
                           'vmau', 'ampl', 'ios', 'rog', 'ros', 'sw']
        
-    def PhenoShape(self, doy=None, interpolType='linear', nan_replace=None,
-                   rollWindow=5, nGS=52):
+    def PhenoShape(self, doy: list=None, interpolType: str='linear', nan_replace: np.float64=None,
+                   rollWindow: int=5, nGS: int=52, chunk_size: dict = None):
         """
         Apply the _getPheno2D/_getPheno2 function to a xarray.DataArray object. It calculates all the necessary auxiliary objects in order to use Dask functionality (trough map_blocks).
         
         :param doy: day of the year. If not present, it will attempt to extract the doy from the time dimension.
         :param interpolType: interpolation type
-        :param nan_replace: what to do with NaNs
+        :param nan_replace: numeric value to be replaced by np.nan over the computations.
         :param rollWindow: rolling window size
         :param nGS: number of periods per year, usually 52 (number of weeks in a year)
+        :param chunk_size: a dictionary with the chunk size for Dask, in the form {'x': a, 'y': b, 'z': c}
         
         :returns: computed xarray.DataArray
         """
@@ -35,17 +36,18 @@ class Pheno:
         xnew = np.linspace(np.min(doy), np.max(doy), nGS, dtype='int16')
         # TODO: change hemisfere, start doy at the desired day (1 north, 182 south) and keep record about the original doy -> dos (day of season)
         
-        # TODO: define a function to auto calculate next chunk (to ~100MB each chunk)
-        time_chunk = {'x': 10, 'y': 10, 'time': len(stack.time)}
+        
+        if chunk_size is None:
+            chunk_size = {'x': 200, 'y': 200, 'time': len(stack.time)} # TODO: define a function to auto calculate next chunk (to ~100MB each chunk)
         
         coords_ = {'time': xnew,
                   'y': stack.coords['y'],
                   'x': stack.coords['x']}
         template_ = xr.DataArray(np.zeros((nGS, len(stack.y), len(stack.x))), 
                                  coords=coords_,
-                                 dims = ['time', 'y', 'x']).chunk(time_chunk)
+                                 dims = ['time', 'y', 'x']).chunk(chunk_size)
         
-        stack = stack.chunk(time_chunk)
+        stack = stack.chunk(chunk_size)
         kwargs_ = {'doy': doy, 'interpolType': interpolType,  
                    'nan_replace': nan_replace, 'rollWindow': rollWindow, 
                    'nGS': nGS, 'xnew': xnew}
@@ -81,8 +83,8 @@ class Pheno:
         n_ = len(self.LSP_bands)
         stack = self._obj
         xnew = self.kwargs['computePheno']['xnew']
-        time_chunk = [i for i in stack.chunks]
-        time_chunk[0] = n_
+        chunk_size = [i for i in stack.chunks]
+        chunk_size[0] = n_
         if nGS is None:
             nGS = self.kwargs['computePheno']['nGS']
         
@@ -93,7 +95,7 @@ class Pheno:
                    'x': stack.coords['x']}
         template_ = xr.DataArray(np.zeros((n_, len(stack.y), len(stack.x))), 
                                  coords=coords_,
-                                 dims = ['doy', 'y', 'x']).chunk(time_chunk)
+                                 dims = ['doy', 'y', 'x']).chunk(chunk_size)
         
         stackP = stack.map_blocks(_parseLSP, kwargs=kwargs_, template=template_).rename({'doy': 'LSP_bands'})
         stackP.pheno.kwargs['computePhenoLSP'] = kwargs_  # this doesn't work, is not saved, pheno objet its lost in datadaset transformation

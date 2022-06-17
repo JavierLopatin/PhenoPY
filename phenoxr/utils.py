@@ -61,7 +61,7 @@ def computeChunkSize(arr, sizeMB=100, Z='time'):
     shape = arr.shape
     if len(shape) != 3:
         raise(f'DataArray dimensions should be 3, not {shape}')
-    total_sizeMB = reduce(lambda x, y: x*y, shape) / 1000**2 * bmod
+    total_sizeMB = reduce(lambda x, y: x*y, shape) / 1024**2 * 2 **bmod
     if total_sizeMB >= sizeMB:
         pass
     else:
