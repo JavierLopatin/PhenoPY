@@ -157,10 +157,12 @@ class Pheno:
             eosm = phen.where(temp_ <= eos)
             
             # TODO: take into account the option of a persist option (to persist here).
-            return {'rmse': rmse, 
+            out = {'rmse': rmse, 
                     'rmse_sos': _rmse(sosm, original_stack, 'doy', normalized),
                     'rmse_pos': _rmse(posm, original_stack, 'doy', normalized),
                     'rmse_eos': _rmse(eosm, original_stack, 'doy', normalized)}
+            
+            return xr.Dataset(out)
     
     def PhenoPlot(self):
         # TODO: original data vs PhenoShape, coordinates or position as input to plot [option to use ipyleaflet to select a point or another kind of interaction]
