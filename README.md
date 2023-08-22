@@ -31,7 +31,7 @@
 
 ### Documentation comming soon...
 
-### Exampe:
+### Example:
 
 Monthly tome series data of SIF (satellite-retrieved solar-induced  chlorophyll fluorescence) depicted from Chen et al. (2022; https://www.nature.com/articles/s41597-022-01520-1). The area here is a small sample for Chile.
 
