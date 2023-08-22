@@ -566,7 +566,7 @@ img.isel(time=0).plot(robust=True)
 
 
     
-![png](output_4_1.png)
+![png](ExampleData/output_4_1.png)
     
 
 
@@ -586,7 +586,7 @@ plt.ylabel('SIF ['r'$Wm^{-2}nm^{-1}sr^{-1}$]')
 
 
     
-![png](output_5_1.png)
+![png](ExampleData/output_5_1.png)
     
 
 
@@ -607,7 +607,7 @@ plt.ylabel('SIF ['r'$Wm^{-2}nm^{-1}sr^{-1}$]')
 
 
     
-![png](output_6_1.png)
+![png](ExampleData/output_6_1.png)
     
 
 
@@ -628,7 +628,7 @@ plt.ylabel('SIF ['r'$Wm^{-2}nm^{-1}sr^{-1}$]')
 
 
     
-![png](output_7_1.png)
+![png](ExampleData/output_7_1.png)
     
 
 
@@ -653,7 +653,7 @@ PhenoPlot(img, X, Y, interpolType='linear', rollWindow=5, plotType=1)
 
 
     
-![png](output_9_1.png)
+![png](ExampleData/output_9_1.png)
     
 
 
@@ -1146,7 +1146,7 @@ plt.title('SIF timeseries in the southern hemisphere with pseudo-doy')
 
 
     
-![png](output_12_1.png)
+![png](ExampleData/output_12_1.png)
     
 
 
@@ -1183,7 +1183,7 @@ plt.show()
 
 
     
-![png](output_14_0.png)
+![png](ExampleData/output_14_0.png)
     
 
 
@@ -1214,7 +1214,7 @@ plt.show()
 
 
     
-![png](output_17_0.png)
+![png](ExampleData/output_17_0.png)
     
 
 
@@ -1233,7 +1233,7 @@ plot_with_southern_doy(shape_south, coordinates=[X,Y], ylabel='SIF ['r'$Wm^{-2}n
 
 
     
-![png](output_18_1.png)
+![png](ExampleData/output_18_1.png)
     
 
 
@@ -2607,7 +2607,7 @@ plt.show()
 
 
     
-![png](output_21_0.png)
+![png](ExampleData/output_21_0.png)
     
 
 
@@ -2617,7 +2617,7 @@ See Lopatin (2023; https://ieeexplore.ieee.org/document/10128132).
 
 E.g., 
 
-<img src="data/Fig_Segmented_nRMSE.jpg" alt="" width="700"/>
+<img src="phenoshape/data/Fig_Segmented_nRMSE.jpg" alt="" width="700"/>
 
 
 ```python
@@ -3252,7 +3252,7 @@ plt.show()
 
 
     
-![png](output_24_0.png)
+![png](ExampleData/output_24_0.png)
     
 
 
@@ -3276,7 +3276,7 @@ plt.show()
 
 
     
-![png](output_25_0.png)
+![png](ExampleData/output_25_0.png)
     
 
 
@@ -3298,6 +3298,6 @@ plt.show()
 
 
     
-![png](output_26_0.png)
+![png](ExampleData/output_26_0.png)
     
 
