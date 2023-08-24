@@ -33,7 +33,7 @@
 
 ### Example:
 
-Monthly tome series data of SIF (satellite-retrieved solar-induced  chlorophyll fluorescence) depicted from Chen et al. (2022; https://www.nature.com/articles/s41597-022-01520-1). The area here is a small sample for Chile.
+Monthly time series data of SIF (satellite-retrieved solar-induced  chlorophyll fluorescence) depicted from Chen et al. (2022; https://www.nature.com/articles/s41597-022-01520-1). The area here is a small sample for Chile.
 
 See the Notebook at: https://github.com/JavierLopatin/PhenoPY/blob/master/phenopy/ExampleData.ipynb
 
@@ -179,7 +179,7 @@ As you can see, if you take only yearly data you may end up with many gaps in th
 
 
 ```python
-# Use the PhenoPlot funtion with an example X, Y coordinates to play with interpolation parameters.
+# Use the PhenoPlot function with an example X, Y coordinates to play with interpolation parameters.
 
 X = np.median(img.x.values)
 Y = np.median(img.y.values)
