@@ -33,7 +33,7 @@ from tqdm import tqdm                # progress bar
 # from PhenoPy
 
 #import all function from utils.py
-from utils import _getPheno0, _getPheno2D, _parseLSP, _getLSPmetrics2, _rmse
+from utils import _getPheno0, _getPheno2D, _parseLSP, _getLSPmetrics2, _rmse, _replaceElements
 
 
 @xr.register_dataarray_accessor("pheno")
@@ -146,7 +146,7 @@ class Pheno:
         :returns: computed xarray.DataArray with the RMSE
         """
         # shape = ans.copy(); original_stack=ndvi.copy(); LSP_stack = ans2.copy()
-        ds = self._obj # inShape, phen  || # original_stack = inData = dstack
+        computed_stack = self._obj # inShape, phen  || # original_stack = inData = dstack
         
         # 1. Check if I'm PhenoShape data
         if 'computePheno' not in self.kwargs:
@@ -168,9 +168,9 @@ class Pheno:
                   
         # 3. Linear interpolation for pheno, to match original_stack doys
         if interpolate_nans:
-            ds2 = ds.interpolate_na('doy')
+            computed_stack = computed_stack.interpolate_na('doy')
             
-        ds2 = ds.interp(doy=sdoys, method='linear')
+        computed_stack = computed_stack.interp(doy=sdoys, method='linear')
         
         # If the dimension 'time' exists and 'doy' doesn't, rename 'time' to 'doy'
         if 'time' in original_stack.dims and 'doy' not in original_stack.dims:
@@ -178,17 +178,17 @@ class Pheno:
                 original_stack = original_stack.drop_vars('doy')
             original_stack = original_stack.rename({'time': 'doy'})
 
-        if 'time' in ds2.dims and 'doy' not in ds2.dims:
-            if 'doy' in ds2.coords:
-                ds2 = ds2.drop_vars('doy')
-            ds2 = ds2.rename({'time': 'doy'})
+        # if 'time' in computed_stack.dims and 'doy' not in computed_stack.dims:
+        #     if 'doy' in computed_stack.coords:
+        #         computed_stack = computed_stack.drop_vars('doy')
+        #     computed_stack = computed_stack.rename({'time': 'doy'})
 
         # Ensure the dimension names are now consistent between original_stack and computed_stack
-        assert set(original_stack.dims) == set(ds2.dims), "Dimension names don't match between the two datasets."
+        # assert set(original_stack.dims) == set(ds2.dims), "Dimension names don't match between the two datasets."
     
         # 4. RMSE
         # overall rmse
-        rmse = _rmse(ds2, original_stack, normalized)
+        rmse = _rmse(computed_stack, original_stack, normalized)
         
         # segmented rmse  
         sos = LSP_stack['sos'] # .expand_dims({'doy': sdoys})
@@ -200,11 +200,11 @@ class Pheno:
         temp_ = xr.DataArray(data = np.repeat(sdoys, x_*y_).reshape(len(sdoys), y_, x_),
                                 dims = original_stack.dims, 
                                 coords = original_stack.coords,
-                                attrs = original_stack.attrs).chunk(ds2.chunks)
+                                attrs = original_stack.attrs).chunk(computed_stack.chunks)
 
-        sosm = ds2.where(temp_ >= sos)
-        eosm = ds2.where(temp_ <= eos)
-        posm = ds2.where((temp_ > sos) & (temp_ < eos))
+        sosm = computed_stack.where(temp_ >= sos)
+        eosm = computed_stack.where(temp_ <= eos)
+        posm = computed_stack.where((temp_ > sos) & (temp_ < eos))
 
         rmse_sos = _rmse(sosm, original_stack, normalized)
         rmse_pos = _rmse(posm, original_stack, normalized)
@@ -219,6 +219,3 @@ class Pheno:
         return xr.Dataset(out)
 
         
-    def PhenoPlot(self):
-        # TODO: original data vs PhenoShape, coordinates or position as input to plot [option to use ipyleaflet to select a point or another kind of interaction]
-        pass

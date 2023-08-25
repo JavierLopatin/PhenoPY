@@ -8,6 +8,7 @@ from scipy.stats import skew
 from sklearn.metrics import mean_squared_error
 import xarray as xr
 
+
 def reorder_southern_hemisphere(img: xr.Dataset):
     """
     Reorder the DOY of the img for the Southern Hemisphere to ensure
@@ -33,7 +34,7 @@ def reorder_southern_hemisphere(img: xr.Dataset):
 
     # Re-index the img using the reordered time values
     da = img.sel(time=reordered_times)
-    da.doy.values = np.sort(doy)#np.linspace(1, 365, len(doy)).astype(int)
+    da.doy.values = np.linspace(1, 365, len(da.time.values))#np.sort(doy)#
 
     return positions, da
 
@@ -341,7 +342,7 @@ def _fillNaN(x):
     mask = np.isnan(x) 
     x[mask] = np.interp(np.flatnonzero(mask), np.flatnonzero(~mask), x[~mask])
     return x
-    
+
 def _replaceElements(arr):
     '''
     Replace monotonic vector values to avoid
