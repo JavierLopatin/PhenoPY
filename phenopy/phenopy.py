@@ -62,6 +62,7 @@ class Pheno:
         stack = self._obj
         doy=stack.doy.values
         dates=stack.time
+        years = np.unique(dates.time.dt.year.values)
   
         # Get the indices that would sort the doy coordinate
         #sorted_indices = np.argsort(stack.doy.values)
@@ -72,7 +73,7 @@ class Pheno:
         # TODO: change hemisfere, start doy at the desired day (1 north, 182 south) and keep record about the original doy -> dos (day of season)
         
         # TODO: define a function to auto calculate next chunk (to ~100MB each chunk)
-        time_chunk = {'x': 10, 'y': 10, 'time': len(stack.time)}
+        time_chunk = {'x': 300, 'y': 300}# 'time': len(stack.time)}
         
         coords_ = {'time': xnew,
                   'y': stack.coords['y'],
@@ -293,11 +294,6 @@ class Pheno:
             sample = ds.where(ds.year.isin(years_list[i]), drop=True)
             year_sample = sample.year.values
             mean_year = np.mean(year_sample).astype(int)
-
-            # Ensure the dataset is chunked properly along the 'time' dimension
-            if np.unique(sample.year).size < 2:
-                print("Error: Time windows should have more than one year")
-
             phenoshape = sample.pheno.PhenoShape(interpolType=interpolType, nan_replace=nan_replace, rollWindow=rollWindow, nGS=nGS)
             lsp = phenoshape.pheno.PhenoLSP(nGS=nGS)
             lsp = lsp.assign_coords(year=mean_year)
@@ -306,7 +302,7 @@ class Pheno:
             # Only estimate rmse if it's provided in the metric list
             if 'rmse' in metric or 'all' in metric:
                 try:
-                    rmse_val = phenoshape.pheno.RMSE(ds, LSP_stack=lsp, normalized=RMSEnormalized, nan_replace=nan_replace, interpolate_nans=interpolate_nans)
+                    rmse_val = phenoshape.pheno.RMSE(ds, LSP_stack=lsp, normalized=RMSEnormalized, nan_replace=nan_replace, interpolate_nans=interpolate_nans,  )
                     rmse_val = rmse_val.assign_coords(year=mean_year)
                     metrics_dict["rmse"].append(rmse_val.rmse)
                 except:
