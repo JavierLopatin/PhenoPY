@@ -239,7 +239,7 @@ def _getLSPmetrics2(phen, xnew, nGS, bands, phentype):
 
         return metrics
     
-
+'''
 def _getPheno2D(dstack, doy, interpolType, nan_replace, rollWindow, nGS, xnew=None):
     # dstack.doy
     ans = np.apply_along_axis(_getPheno0, 0, dstack, doy, interpolType, nan_replace, rollWindow, nGS)
@@ -247,6 +247,14 @@ def _getPheno2D(dstack, doy, interpolType, nan_replace, rollWindow, nGS, xnew=No
     # TODO: ¿_getPheno0 cambia el orden del arreglo? si es así, debo corregir - DONE?
     # TODO: retornar día del año modificado, eliminar time/year, usar xnew (nuevo doy) - DONE!
     # Esto se llama PhenoShape
+    
+    if xnew is None:
+        xnew = range(1, nGS + 1)
+        
+    return _assemble(ans, dstack, {'time': xnew}, True)
+'''
+def _getPheno2D(dstack, doy, interpolType, nan_replace, rollWindow, nGS, xnew=None):
+    ans = np.apply_along_axis(_getPheno0, 0, dstack, doy, interpolType, nan_replace, rollWindow, nGS)
     
     if xnew is None:
         xnew = range(1, nGS + 1)

@@ -34,6 +34,7 @@ from tqdm import tqdm                # progress bar
 
 #import all function from utils.py
 from utils import _getPheno0, _getPheno2D, _parseLSP, _getLSPmetrics2, _rmse, _replaceElements
+from curvature import get_curvature
 
 
 @xr.register_dataarray_accessor("pheno")
@@ -133,7 +134,7 @@ class Pheno:
 
         return stackP.to_dataset('LSP_bands')
     
-    def RMSE(self, original_stack, LSP_stack, normalized=False, nan_replace=None, interpolate_nans=False):
+    def RMSE(self, original_stack, LSP_stack, normalized=False, nan_replace=None, interpolate_nans=False, segment=False):
         """
         Calculate the RMSE of the PhenoShape estimation; it can also do it by section, using the sos, pos and eos from the LSP computation (if provided).
         
@@ -142,7 +143,7 @@ class Pheno:
         :param normalized: boolean, if True RMSE will be scaled to [0, 1].
         :param nan_replace: values to be converted to NaN.
         :param interpolate_nans: boolean, should NaNs values be interpolated?
-        
+        :param metrics: string, either 'overall' or 'segmented'. If 'overall', the RMSE is calculated for the whole stack. If 'segmented', the RMSE is calculated for the sos, pos and eos segments.
         :returns: computed xarray.DataArray with the RMSE
         """
         # shape = ans.copy(); original_stack=ndvi.copy(); LSP_stack = ans2.copy()
@@ -190,32 +191,162 @@ class Pheno:
         # overall rmse
         rmse = _rmse(computed_stack, original_stack, normalized)
         
-        # segmented rmse  
-        sos = LSP_stack['sos'] # .expand_dims({'doy': sdoys})
-        pos = LSP_stack['pos']
-        eos = LSP_stack['eos']
+        if segment is False:
+            out = {'rmse': rmse}
+            return xr.Dataset(out)      
+        
+        elif segment is True: 
+            # segmented rmse  
+            sos = LSP_stack['sos'] # .expand_dims({'doy': sdoys})
+            pos = LSP_stack['pos']
+            eos = LSP_stack['eos']
 
-        x_ = len(original_stack.coords['x'])
-        y_ = len(original_stack.coords['y'])
-        temp_ = xr.DataArray(data = np.repeat(sdoys, x_*y_).reshape(len(sdoys), y_, x_),
-                                dims = original_stack.dims, 
-                                coords = original_stack.coords,
-                                attrs = original_stack.attrs).chunk(computed_stack.chunks)
+            x_ = len(original_stack.coords['x'])
+            y_ = len(original_stack.coords['y'])
+            temp_ = xr.DataArray(data = np.repeat(sdoys, x_*y_).reshape(len(sdoys), y_, x_),
+                                    dims = original_stack.dims, 
+                                    coords = original_stack.coords,
+                                    attrs = original_stack.attrs).chunk(computed_stack.chunks)
 
-        sosm = computed_stack.where(temp_ >= sos)
-        eosm = computed_stack.where(temp_ <= eos)
-        posm = computed_stack.where((temp_ > sos) & (temp_ < eos))
+            sosm = computed_stack.where(temp_ >= sos)
+            eosm = computed_stack.where(temp_ <= eos)
+            posm = computed_stack.where((temp_ > sos) & (temp_ < eos))
 
-        rmse_sos = _rmse(sosm, original_stack, normalized)
-        rmse_pos = _rmse(posm, original_stack, normalized)
-        rmse_eos = _rmse(eosm, original_stack, normalized)
+            rmse_sos = _rmse(sosm, original_stack, normalized)
+            rmse_pos = _rmse(posm, original_stack, normalized)
+            rmse_eos = _rmse(eosm, original_stack, normalized)
 
-        # TODO: take into account the option of a persist option (to persist here).
-        out = {'rmse': rmse, 
-                'rmse_sos': rmse_sos,
-                'rmse_pos': rmse_pos,
-                'rmse_eos': rmse_eos}
-                        
-        return xr.Dataset(out)
+            # TODO: take into account the option of a persist option (to persist here).
+            out = {'rmse': rmse, 
+                    'rmse_sos': rmse_sos,
+                    'rmse_pos': rmse_pos,
+                    'rmse_eos': rmse_eos}              
+            return xr.Dataset(out)
+        else:
+            raise ValueError("segment should be either True or False")
+    
+    def get_timeseries_metrics(self, window_length=3, metric="all", interpolType='linear', 
+                            rollWindow=5, nGS=52, RMSEnormalized=True, nan_replace=None, 
+                            interpolate_nans=False):
+        """
+        Calculate and return a specified phenological metric timeseries.
+
+        Parameters:
+        - ds (xarray.Dataset): 
+            Input dataset containing the data to process.
+        - years_list (list): 
+            List of years to consider for timeseries extraction.
+        - rollWindow (int): 
+            Rolling window size used in the PhenoShape calculation.
+        - metric (str, list): 
+            The specific metric to return. Choices are 'sos', 'pos', 'eos', 'los', 'msp', 'mau', 'vmsp', 
+                        'vmau', 'aos', 'ios', 'rog', 'ros', 'rmse' [only overall rmse], 'curvature', or 'all'. Default is 'all'.
+        - nGS: Integer
+            Number of observations to predict the PhenoShape
+            default is 46; one per week
+        - interpolate_nans: boolean
+            should NaNs values be interpolated?
+
+        Returns:
+        - xarray.DataArray: A timeseries of the specified metric.
+        - list of xarray.DataArray: A list of timeseries for each metric.
+
+        Usage:
+        - To get the SOS timeseries: get_timeseries(ds, window_length=3, rollWindow=5, metric="sos")
+        - To get the RMSE timeseries: get_timeseries(ds, window_length=3, rollWindow=5, metric=["eos", "rmse"])
+        """
+
+        metrics_dict = {
+            "sos": [],
+            "pos": [],
+            "eos": [],
+            "vsos": [],
+            "vpos": [],
+            "veos": [],
+            "los": [],
+            "msp": [],
+            "mau": [],
+            "vmsp": [],
+            "vmau": [],
+            "ampl": [],
+            "ios": [],
+            "rog": [],
+            "ros": [],
+            "sw": [],
+            #"rmse": [],
+            "curvature": []
+        }
+
+        ds = self._obj
+
+        if 'rmse' in metric or 'all' in metric:
+            metrics_dict["rmse"] = []
+            
+        # get a list of years from the dataset
+        if window_length <= 0:
+            raise ValueError("Window length should be a positive integer.")
+        years = np.unique(ds.year.values)
+        years_list = [tuple(years[i:i+window_length]) for i in range(len(years) - window_length + 1)]
+
+        # loop through the list of years and calculate the phenoshape, LSP, RMSE, and Curvature for each timeWindow
+        for i in range(len(years_list)):
+            sample = ds.where(ds.year.isin(years_list[i]), drop=True)
+            year_sample = sample.year.values
+            mean_year = np.mean(year_sample).astype(int)
+
+            # Ensure the dataset is chunked properly along the 'time' dimension
+            if np.unique(sample.year).size < 2:
+                print("Error: Time windows should have more than one year")
+
+            phenoshape = sample.pheno.PhenoShape(interpolType=interpolType, nan_replace=nan_replace, rollWindow=rollWindow, nGS=nGS)
+            lsp = phenoshape.pheno.PhenoLSP(nGS=nGS)
+            lsp = lsp.assign_coords(year=mean_year)
+            #rmse_val = phenoshape.pheno.RMSE(ds, LSP_stack=lsp, normalized=RMSEnormalized, nan_replace=nan_replace, interpolate_nans=interpolate_nans)
+            #rmse_val = rmse_val.assign_coords(year=mean_year)
+            # Only estimate rmse if it's provided in the metric list
+            if 'rmse' in metric or 'all' in metric:
+                try:
+                    rmse_val = phenoshape.pheno.RMSE(ds, LSP_stack=lsp, normalized=RMSEnormalized, nan_replace=nan_replace, interpolate_nans=interpolate_nans)
+                    rmse_val = rmse_val.assign_coords(year=mean_year)
+                    metrics_dict["rmse"].append(rmse_val.rmse)
+                except:
+                    print("Failed to compute RMSE for year:", mean_year)
+                    rmse_val = None  # Set to None or some other placeholder value
+            curvature_val = get_curvature(phenoshape)
+            curvature_val = curvature_val.assign_coords(year=mean_year)
+
+            # append each metric to the corresponding list in the dictionary
+            metrics_dict["sos"].append(lsp.sos)
+            metrics_dict["pos"].append(lsp.pos)
+            metrics_dict["eos"].append(lsp.eos)
+            metrics_dict["vsos"].append(lsp.vsos)
+            metrics_dict["vpos"].append(lsp.vpos)
+            metrics_dict["veos"].append(lsp.veos)
+            metrics_dict["los"].append(lsp.los)
+            metrics_dict["msp"].append(lsp.msp)
+            metrics_dict["mau"].append(lsp.mau)
+            metrics_dict["vmsp"].append(lsp.vmsp)
+            metrics_dict["vmau"].append(lsp.vmau)
+            metrics_dict["ampl"].append(lsp.ampl)
+            metrics_dict["ios"].append(lsp.ios)
+            metrics_dict["rog"].append(lsp.rog)
+            metrics_dict["ros"].append(lsp.ros)
+            metrics_dict["sw"].append(lsp.sw)
+            metrics_dict["curvature"].append(curvature_val)
+    
+        # concatenate the lists of each metric into a single xarray DataArray
+        for key in metrics_dict:
+            metrics_dict[key] = xr.concat(metrics_dict[key], dim='time')
+
+        if metric == 'all':
+            metric = list(metrics_dict.keys())
+
+        # if a single metric string is provided, convert it to a list
+        elif isinstance(metric, str):
+            metric = [metric]
+        
+        # Return the timeseries for the specified metric(s)
+        return {m: metrics_dict[m] for m in metric}
+
 
         
