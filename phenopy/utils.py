@@ -335,7 +335,7 @@ def computeChunkSize(arr, sizeMB=100, Z='time'):
     
 def _moving_average(a, n=3) :
     out = np.convolve(a, np.ones(n), 'valid') / n    
-    return np.concatenate([ a[:np.int(n/2)], out, a[-np.int(n/2):] ]) # add values of tail
+    return np.concatenate([ a[:np.int32(n/2)], out, a[-np.int32(n/2):] ]) # add values of tail
 
 def _fillNaN(x):
     # Fill NaN data by linear interpolation
