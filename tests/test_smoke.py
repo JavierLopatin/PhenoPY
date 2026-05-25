@@ -8,8 +8,22 @@ import xarray as xr
 import phenopy  # noqa: F401  (importing registers the `pheno` accessor)
 
 LSP_BANDS = [
-    "sos", "pos", "eos", "vsos", "vpos", "veos", "los", "msp",
-    "mau", "vmsp", "vmau", "ampl", "ios", "rog", "ros", "sw",
+    "sos",
+    "pos",
+    "eos",
+    "vsos",
+    "vpos",
+    "veos",
+    "los",
+    "msp",
+    "mau",
+    "vmsp",
+    "vmau",
+    "ampl",
+    "ios",
+    "rog",
+    "ros",
+    "sw",
 ]
 
 

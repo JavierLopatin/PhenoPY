@@ -39,17 +39,17 @@ dependencies = [
     "rasterstats",
     "shapely",
     "tqdm",
+    "dask[array]",
 ]
 
 [project.optional-dependencies]
 plot = ["matplotlib", "folium", "pyproj"]
-dask = ["dask[array]"]
 fit = ["whittaker-eilers", "pymannkendall"]
 kde = ["KDEpy"]
 fast = ["numba"]
 test = ["pytest", "pytest-cov", "ruff"]
 docs = ["mkdocs-material", "mkdocstrings[python]"]
-all = ["phenopy[plot,dask,fit,kde,fast]"]
+all = ["phenopy[plot,fit,kde,fast]"]
 
 [project.urls]
 Homepage = "https://github.com/JavierLopatin/PhenoPY"
@@ -88,6 +88,8 @@ exclude = [
 [tool.ruff]
 line-length = 100
 target-version = "py310"
+# Don't touch the example notebook (user-maintained) or data files.
+extend-exclude = ["*.ipynb", "phenopy/data"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I"]

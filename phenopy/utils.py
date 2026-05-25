@@ -9,19 +9,19 @@ from scipy.interpolate import Rbf, interp1d
 from scipy.stats import skew
 
 
-def reorder_southern_hemisphere(img: xr.Dataset):
+def reorder_southern_hemisphere(img: xr.Dataset) -> tuple:
     """
     Reorder the DOY of the img for the Southern Hemisphere to ensure
     peak summer is in the middle. This reordering is critical for some applications
     like phenological studies.
-    
+
     :param img: xarray Dataset with `time` and `doy` dimensions/coordinates.
     :return: The input xarray Dataset reordered by DOY.
     """
     doy = img.doy.values
     time_values = img.time.values
 
-    arr1 = np.linspace(183, 365, int(365-180)).astype(int)
+    arr1 = np.linspace(183, 365, int(365 - 180)).astype(int)
     arr2 = np.linspace(1, 185, 180).astype(int)
     result = np.concatenate((arr1, arr2))
     positions = [np.where(result == value)[0][0] for value in doy]
@@ -30,11 +30,13 @@ def reorder_southern_hemisphere(img: xr.Dataset):
     position_map = {value: np.where(result == value)[0][0] for value in doy}
 
     # Reorder the time values based on the mapping
-    reordered_times = sorted(time_values, key=lambda x: position_map[img.sel(time=x).doy.values.item()])
+    reordered_times = sorted(
+        time_values, key=lambda x: position_map[img.sel(time=x).doy.values.item()]
+    )
 
     # Re-index the img using the reordered time values
     da = img.sel(time=reordered_times)
-    da.doy.values = np.linspace(1, 365, len(da.time.values))#np.sort(doy)#
+    da.doy.values = np.linspace(1, 365, len(da.time.values))  # np.sort(doy)#
 
     return positions, da
 
@@ -54,12 +56,14 @@ def _getPheno(y, x, nGS, interpolType):
             if inds.any():  # if inds have at least one True
                 y = _fillNaN(y)
                 _replaceElements(x)  # replace doy values when they are the same
-            if interpolType == 'linear':
+            if interpolType == "linear":
                 ynew = np.interp(xnew, x, y)
-            elif interpolType == 'RBF':
-                f = Rbf(x, y, function='cubic')  # you had a typo here 'funciton' instead of 'function'
+            elif interpolType == "RBF":
+                f = Rbf(
+                    x, y, function="cubic"
+                )  # you had a typo here 'funciton' instead of 'function'
                 ynew = f(xnew)
-            elif interpolType == 'KDE':
+            elif interpolType == "KDE":
                 ynew = _KDE(x, y, nGS)
             else:
                 f = interp1d(x, y, kind=interpolType)
@@ -68,19 +72,20 @@ def _getPheno(y, x, nGS, interpolType):
         except Exception as e:  # It's good to handle exceptions in the try block
             print(f"An error occurred: {e}")
             return None
-            
+
+
 def _getPheno0(y, doy, interpolType, nan_replace, rollWindow, nGS):
- 
+
     # replace nan_relace values by NaN
     if nan_replace is not None:
         y = np.where(y == nan_replace, np.nan, y)
-  
-    # sort values by DOY  
+
+    # sort values by DOY
     idx = doy.argsort()
-    y = y[idx]     
-    
+    y = y[idx]
+
     # prepare tails for interpolation
-    '''
+    """
     minn = np.nanmin(y)
     start = y[0:3]
     end = y[-3:]
@@ -88,19 +93,22 @@ def _getPheno0(y, doy, interpolType, nan_replace, rollWindow, nGS):
         y[0:3] = minn
     if np.all( np.isnan(end) ):
         y[-3:] = minn
-    '''
+    """
     # get phenological shape
-    phen = _getPheno(y, 
-                     doy[idx],
-                     #doy, 
-                     nGS, 
-                     interpolType)
-    
+    phen = _getPheno(
+        y,
+        doy[idx],
+        # doy,
+        nGS,
+        interpolType,
+    )
+
     # rolling average using moving window
     if rollWindow is not None:
         phen = _moving_average(phen, rollWindow)
-    
+
     return phen
+
 
 def _getLSPmetrics2(phen, xnew, nGS, bands, phentype):
     """
@@ -111,7 +119,7 @@ def _getLSPmetrics2(phen, xnew, nGS, bands, phentype):
     - phen: 1D array
         PhenoShape data
     - xnew: 1D array
-        DOY values for PhenoShape data	
+        DOY values for PhenoShape data
     - bands: string list
         Name of the output bands (soft requirement)
 
@@ -154,7 +162,7 @@ def _getLSPmetrics2(phen, xnew, nGS, bands, phentype):
 
         # separate greening from senesence values
         dev = np.gradient(ratio)  # first derivative
-        greenup = np.zeros([ratio.shape[0]],  dtype=bool)
+        greenup = np.zeros([ratio.shape[0]], dtype=bool)
         greenup[dev > 0] = True
 
         # select time where SOS and EOS are located (around trs value)
@@ -162,29 +170,29 @@ def _getLSPmetrics2(phen, xnew, nGS, bands, phentype):
         if phentype in [1, 2]:  # estimate SOS and EOS as median of the season
             if phentype == 2:
                 warnings.warn("Type 2 is currently not implemented", DeprecationWarning)
-            i = np.median(xnew[:ipos[0]][greenup[:ipos[0]]])
-            ii = np.median(xnew[ipos[0]:][~greenup[ipos[0]:]])
+            i = np.median(xnew[: ipos[0]][greenup[: ipos[0]]])
+            ii = np.median(xnew[ipos[0] :][~greenup[ipos[0] :]])
             sos = xnew[(np.abs(xnew - i)).argmin()]
             eos = xnew[(np.abs(xnew - ii)).argmin()]
             isos = np.where(xnew == int(sos))[0]
             ieos = np.where(xnew == eos)[0]
-#         elif phentype == 2:  # estimate SOS and EOS by inflection curves
-#             #-- consider only observation before POS for SOS
-#             knee1 = KneeLocator(xnew[0:ipos[0]], ratio[0:ipos[0]], S=2,
-#                                 curve='convex', direction='increasing')
-#             sos = knee1.knee
-#             isos = np.where(xnew == knee1.knee)[0]
+        #         elif phentype == 2:  # estimate SOS and EOS by inflection curves
+        #             #-- consider only observation before POS for SOS
+        #             knee1 = KneeLocator(xnew[0:ipos[0]], ratio[0:ipos[0]], S=2,
+        #                                 curve='convex', direction='increasing')
+        #             sos = knee1.knee
+        #             isos = np.where(xnew == knee1.knee)[0]
 
-#             #-- consider only observation after POS for EOS
-#             x = xnew[-(nGS - ipos[0] - 1):]
-#             y = ratio[-(nGS - ipos[0] - 1):]
-#             knee2 = KneeLocator(range(len(x)), np.flip(y), S=2,
-#                                 curve='convex', direction='increasing')
-#             eos = x[np.where(
-#                 np.flip(range(len(x))) == knee2.knee)[0]][0]
-#             ieos = np.where(xnew == eos)[0]
+        #             #-- consider only observation after POS for EOS
+        #             x = xnew[-(nGS - ipos[0] - 1):]
+        #             y = ratio[-(nGS - ipos[0] - 1):]
+        #             knee2 = KneeLocator(range(len(x)), np.flip(y), S=2,
+        #                                 curve='convex', direction='increasing')
+        #             eos = x[np.where(
+        #                 np.flip(range(len(x))) == knee2.knee)[0]][0]
+        #             ieos = np.where(xnew == eos)[0]
         else:
-            print('phentype must be either 1 or 2')
+            print("phentype must be either 1 or 2")
         if sos is None:
             isos = 0
             sos = xnew[isos]
@@ -198,7 +206,7 @@ def _getLSPmetrics2(phen, xnew, nGS, bands, phentype):
             los = np.nan
 
         # get MSP, MAU (independent from SOS and EOS)
-        
+
         # mean spring
         idx = np.mean(xnew[(xnew > sos) & (xnew < pos[0])])
         idx = (np.abs(xnew - idx)).argmin()  # indexing value
@@ -215,15 +223,15 @@ def _getLSPmetrics2(phen, xnew, nGS, bands, phentype):
         green = xnew[(xnew > sos) & (xnew < eos)]
         id_ = []
         for i in range(len(green)):
-            id_.append((xnew == green[i]).nonzero()[0])   
+            id_.append((xnew == green[i]).nonzero()[0])
         # TODO: move id_ generation to a list comprehension -> id_ = [(xnew == green[i]).nonzero()[0] for i in range(len(green))]
-        
+
         # index of growing season
         id = np.array([item for sublist in id_ for item in sublist])
 
         # get intergral of green season
         ios = trapezoid(phen[id], xnew[id]) if len(id) > 0 else np.nan
-        
+
         # skewness of growing season
         sw = skew(phen[id]) if len(id) > 0 else np.nan
 
@@ -233,62 +241,80 @@ def _getLSPmetrics2(phen, xnew, nGS, bands, phentype):
         # rate of senescence [slope POS-EOS]
         ros = (phen[ieos] - vpos) / (eos - pos)
 
-        metrics = np.array((sos, pos[0], eos, phen[isos][0], vpos,
-                            phen[ieos][0], los, msp, mau, vmsp, vmau, ampl, ios, rog[0],
-                            ros[0], sw))
+        metrics = np.array(
+            (
+                sos,
+                pos[0],
+                eos,
+                phen[isos][0],
+                vpos,
+                phen[ieos][0],
+                los,
+                msp,
+                mau,
+                vmsp,
+                vmau,
+                ampl,
+                ios,
+                rog[0],
+                ros[0],
+                sw,
+            )
+        )
 
         return metrics
-    
+
 
 def _getPheno2D(dstack, doy, interpolType, nan_replace, rollWindow, nGS, xnew=None):
     # dstack.doy
-    ans = np.apply_along_axis(_getPheno0, 0, dstack, doy, interpolType, nan_replace, rollWindow, nGS)
-    
+    ans = np.apply_along_axis(
+        _getPheno0, 0, dstack, doy, interpolType, nan_replace, rollWindow, nGS
+    )
+
     # TODO: ¿_getPheno0 cambia el orden del arreglo? si es así, debo corregir - DONE?
     # TODO: retornar día del año modificado, eliminar time/year, usar xnew (nuevo doy) - DONE!
     # Esto se llama PhenoShape
-    
+
     if xnew is None:
         xnew = range(1, nGS + 1)
-        
-    return _assemble(ans, dstack, {'time': xnew}, True)
-  
+
+    return _assemble(ans, dstack, {"time": xnew}, True)
+
 
 def _parseLSP(dstack, xnew, nGS, bands, phentype):
     # num=len(bandNames) = 16
     ans = np.apply_along_axis(_getLSPmetrics2, 0, dstack, xnew, nGS, bands, phentype)
-    
-    return _assemble(ans, dstack, {'doy': bands}, True)
+
+    return _assemble(ans, dstack, {"doy": bands}, True)
 
 
 def _assemble(computed_data, original_stack, z_values, asDataArray=True):
     coords_ = z_values
-    coords_['y'] = original_stack['y']
-    coords_['x'] = original_stack['x']
-    
+    coords_["y"] = original_stack["y"]
+    coords_["x"] = original_stack["x"]
+
     if asDataArray:
-        out = xr.DataArray(computed_data, 
-                           coords=coords_, 
-                           dims=original_stack.dims)
+        out = xr.DataArray(computed_data, coords=coords_, dims=original_stack.dims)
     else:
         pass
-    
+
     return out
 
 
 def _rmse(computed_stack, original_stack, normalized=False):
     # Compute RMSE
-    N = len(computed_stack['doy'])
-    squared_difference = (original_stack - computed_stack)**2
-    mean_squared_error = squared_difference.sum('doy', keep_attrs=True, skipna=True) / N
+    N = len(computed_stack["doy"])
+    squared_difference = (original_stack - computed_stack) ** 2
+    mean_squared_error = squared_difference.sum("doy", keep_attrs=True, skipna=True) / N
     rmse = mean_squared_error**0.5
 
     if normalized:
-        minn = original_stack.min(dim='doy', skipna=True)
-        maxx = original_stack.max(dim='doy', skipna=True)
-        return rmse/(maxx-minn)
+        minn = original_stack.min(dim="doy", skipna=True)
+        maxx = original_stack.max(dim="doy", skipna=True)
+        return rmse / (maxx - minn)
     else:
         return rmse
+
 
 def _KDE(x, y, nGS):
     """Compute a bivariate kde using KDEpy (optional dependency)."""
@@ -321,8 +347,9 @@ def _KDE(x, y, nGS):
     y_pred = np.delete(y_pred, id)
 
     return y_pred
-    
-def computeChunkSize(arr, sizeMB=100, Z='time'):
+
+
+def computeChunkSize(arr, sizeMB=100, Z="time"):
     """
     Return a per-dimension chunk dict targeting ~``sizeMB`` per chunk.
 
@@ -336,37 +363,39 @@ def computeChunkSize(arr, sizeMB=100, Z='time'):
     bmod = arr.dtype.itemsize
     shape = arr.shape
     if len(shape) != 3:
-        raise ValueError(f'DataArray dimensions should be 3, not {len(shape)}')
-    total_sizeMB = reduce(lambda a, b: a * b, shape) / 1000 ** 2 * bmod
+        raise ValueError(f"DataArray dimensions should be 3, not {len(shape)}")
+    total_sizeMB = reduce(lambda a, b: a * b, shape) / 1000**2 * bmod
     if total_sizeMB <= sizeMB:
         return dict(zip(arr.dims, shape))
     # keep the Z axis whole, split the spatial dims into ~square tiles
     z_len = arr.sizes[Z]
     spatial_dims = [d for d in arr.dims if d != Z]
     bytes_per_col = bmod * z_len
-    target_pixels = max(1, int(sizeMB * 1000 ** 2 / bytes_per_col))
-    side = max(1, int(target_pixels ** 0.5))
+    target_pixels = max(1, int(sizeMB * 1000**2 / bytes_per_col))
+    side = max(1, int(target_pixels**0.5))
     chunk = {Z: z_len}
     for d in spatial_dims:
         chunk[d] = min(arr.sizes[d], side)
     return chunk
 
-    
-def _moving_average(a, n=3) :
-    out = np.convolve(a, np.ones(n), 'valid') / n    
-    return np.concatenate([ a[:np.int32(n/2)], out, a[-np.int32(n/2):] ]) # add values of tail
+
+def _moving_average(a, n=3):
+    out = np.convolve(a, np.ones(n), "valid") / n
+    return np.concatenate([a[: np.int32(n / 2)], out, a[-np.int32(n / 2) :]])  # add values of tail
+
 
 def _fillNaN(x):
     # Fill NaN data by linear interpolation
-    mask = np.isnan(x) 
+    mask = np.isnan(x)
     x[mask] = np.interp(np.flatnonzero(mask), np.flatnonzero(~mask), x[~mask])
     return x
 
+
 def _replaceElements(arr):
-    '''
+    """
     Replace monotonic vector values to avoid
     interpolation errors
-    '''
+    """
     s = []
     for i in range(len(arr)):
         # check whether the element

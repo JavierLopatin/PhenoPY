@@ -5,6 +5,7 @@ __pycache__/
 .eggs/
 build/
 dist/
+site/
 
 # Notebooks / tooling caches
 .ipynb_checkpoints/
