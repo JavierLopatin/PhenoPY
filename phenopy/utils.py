@@ -1,12 +1,12 @@
 import sys
-import numpy as np
 import warnings
-# from kneed import KneeLocator # (for phenotype == 2, deprecated
-from scipy.integrate import trapz
+from functools import reduce
+
+import numpy as np
+import xarray as xr
+from scipy.integrate import trapezoid
 from scipy.interpolate import Rbf, interp1d
 from scipy.stats import skew
-from sklearn.metrics import mean_squared_error
-import xarray as xr
 
 
 def reorder_southern_hemisphere(img: xr.Dataset):
@@ -222,7 +222,7 @@ def _getLSPmetrics2(phen, xnew, nGS, bands, phentype):
         id = np.array([item for sublist in id_ for item in sublist])
 
         # get intergral of green season
-        ios = trapz(phen[id], xnew[id]) if len(id) > 0 else np.nan
+        ios = trapezoid(phen[id], xnew[id]) if len(id) > 0 else np.nan
         
         # skewness of growing season
         sw = skew(phen[id]) if len(id) > 0 else np.nan
@@ -291,7 +291,14 @@ def _rmse(computed_stack, original_stack, normalized=False):
         return rmse
 
 def _KDE(x, y, nGS):
-    """Compute a bivariate kde using KDEpy."""
+    """Compute a bivariate kde using KDEpy (optional dependency)."""
+    try:
+        from KDEpy import FFTKDE
+    except ImportError as exc:
+        raise ImportError(
+            "KDE reconstruction requires the optional 'KDEpy' package. "
+            "Install it with `pip install KDEpy` (or the project's [kde] extra)."
+        ) from exc
 
     # Grid points in the x and y direction
     grid_points_x, grid_points_y = nGS + 6, 2**8
@@ -317,19 +324,31 @@ def _KDE(x, y, nGS):
     
 def computeChunkSize(arr, sizeMB=100, Z='time'):
     """
-    TODO: PENDING!
-    :param sizeMB: aprox desired chunk size in MB.
+    Return a per-dimension chunk dict targeting ~``sizeMB`` per chunk.
+
+    The ``Z`` axis (default ``'time'``) is kept whole and the spatial
+    dimensions are split into roughly square tiles to hit the target size.
+
+    :param arr: 3D xarray.DataArray.
+    :param sizeMB: approximate desired chunk size in MB.
     :param Z: name of the Z axis. By default, 'time'.
     """
     bmod = arr.dtype.itemsize
-    ds = arr.shape
-    if len(ds) != 3:
-        raise(f'DataArray dimensions should be 3, not {ds}')
-    total_sizeMB = reduce(lambda x, y: x*y, ds) / 1000**2 * bmod
-    if total_sizeMB >= sizeMB:
-        pass
-    else:
-        chunk = dict(zip(arr.dims, ds))
+    shape = arr.shape
+    if len(shape) != 3:
+        raise ValueError(f'DataArray dimensions should be 3, not {len(shape)}')
+    total_sizeMB = reduce(lambda a, b: a * b, shape) / 1000 ** 2 * bmod
+    if total_sizeMB <= sizeMB:
+        return dict(zip(arr.dims, shape))
+    # keep the Z axis whole, split the spatial dims into ~square tiles
+    z_len = arr.sizes[Z]
+    spatial_dims = [d for d in arr.dims if d != Z]
+    bytes_per_col = bmod * z_len
+    target_pixels = max(1, int(sizeMB * 1000 ** 2 / bytes_per_col))
+    side = max(1, int(target_pixels ** 0.5))
+    chunk = {Z: z_len}
+    for d in spatial_dims:
+        chunk[d] = min(arr.sizes[d], side)
     return chunk
 
     

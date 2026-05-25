@@ -5,36 +5,19 @@
 #
 ###############################################################################
 
-# libraries included in Python 3.X
-from __future__ import division
-import concurrent.futures
-from functools import partial
-import sys
+# standard library
 import warnings
 
 # common dependencies
-import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-from scipy.integrate import trapz
-from scipy.interpolate import Rbf, interp1d
-from scipy.stats import skew
-from sklearn.metrics import mean_squared_error
 
-# speciel dependencies
-import xarray as xr                  # manipulate 3D time-series rasters
-import shapely.geometry as geom      # create geographical points
-import rasterio                      # manipulate GeoTIFF
-from rasterstats import point_query  # extract raster values
-from tqdm import tqdm                # progress bar
-# from kneed import KneeLocator        # find inflection point on a curve
-# from KDEpy import FFTKDE             # perform fast 2D kernel density estimations
+import xarray as xr  # manipulate 3D time-series rasters
 
 # from PhenoPy
 
-#import all function from utils.py
-from utils import _getPheno0, _getPheno2D, _parseLSP, _getLSPmetrics2, _rmse, _replaceElements
-from curvature import get_curvature
+# functions from sibling modules
+from .utils import _getPheno2D, _parseLSP, _rmse
+from .curvature import get_curvature
 
 
 @xr.register_dataarray_accessor("pheno")
@@ -111,7 +94,7 @@ class Pheno:
        
         """
         if 'computePheno' not in self.kwargs:
-            raise('No Pheno computed')  # TODO: replace with auto-compute?
+            raise ValueError('No Pheno computed. Run PhenoShape() first.')  # TODO: auto-compute?
         
         n_ = len(self.LSP_bands)
         stack = self._obj
@@ -152,7 +135,7 @@ class Pheno:
         
         # 1. Check if I'm PhenoShape data
         if 'computePheno' not in self.kwargs:
-            raise('It seems computePheno has not yet been computed...')
+            raise ValueError('It seems computePheno has not yet been computed. Run PhenoShape() first.')
         
         if nan_replace is not None:
             original_stack = original_stack.where(original_stack.values != nan_replace)
@@ -302,12 +285,12 @@ class Pheno:
             # Only estimate rmse if it's provided in the metric list
             if 'rmse' in metric or 'all' in metric:
                 try:
-                    rmse_val = phenoshape.pheno.RMSE(ds, LSP_stack=lsp, normalized=RMSEnormalized, nan_replace=nan_replace, interpolate_nans=interpolate_nans,  )
+                    rmse_val = phenoshape.pheno.RMSE(ds, LSP_stack=lsp, normalized=RMSEnormalized, nan_replace=nan_replace, interpolate_nans=interpolate_nans)
                     rmse_val = rmse_val.assign_coords(year=mean_year)
                     metrics_dict["rmse"].append(rmse_val.rmse)
-                except:
-                    print("Failed to compute RMSE for year:", mean_year)
-                    rmse_val = None  # Set to None or some other placeholder value
+                except Exception as e:
+                    warnings.warn(f"Failed to compute RMSE for year {mean_year}: {e}")
+                    rmse_val = None  # placeholder
             curvature_val = get_curvature(phenoshape)
             curvature_val = curvature_val.assign_coords(year=mean_year)
 

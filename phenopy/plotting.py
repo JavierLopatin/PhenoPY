@@ -1,20 +1,11 @@
+import math
+
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import xarray as xr
-from scipy.integrate import trapz
-from scipy.interpolate import Rbf, interp1d
-from scipy.stats import skew
-from sklearn.metrics import mean_squared_error
-import math
-import folium
-from pyproj import Proj, transform
-from odc.ui import image_aspect
-import warnings
 
-
-#import all function from utils.py
-from utils import _getPheno0, _getPheno2D, _parseLSP, _getLSPmetrics2, _rmse
+# functions from sibling modules
+from .utils import _getPheno0, _getLSPmetrics2
 
 def display_map(x, y, crs='EPSG:4326', margin=-0.5, zoom_bias=0):
     """ 
@@ -67,6 +58,10 @@ def display_map(x, y, crs='EPSG:4326', margin=-0.5, zoom_bias=0):
         else:
             zoom_level_int = 18
         return zoom_level_int
+
+    # heavy optional plotting deps imported lazily (the [plot] extra)
+    import folium
+    from pyproj import Proj, transform
 
     # Convert each corner coordinates to lat-lon
     all_x = (x[0], x[1], x[0], x[1])

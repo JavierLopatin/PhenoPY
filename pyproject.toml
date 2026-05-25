@@ -1,0 +1,98 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+# NOTE: 'phenopy' is already taken on PyPI (a clinical phenotyping tool).
+# This local name lets editable installs work; the published distribution
+# name is a pending decision (e.g. phenopy-eo / phenopy-rs). Import name
+# stays `phenopy`.
+name = "phenopy"
+dynamic = ["version"]
+description = "Land surface phenology metrics from satellite image time series, built on xarray."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE.txt" }
+authors = [{ name = "Javier Lopatin", email = "javierlopatin@gmail.com" }]
+keywords = [
+    "phenology",
+    "remote-sensing",
+    "vegetation",
+    "xarray",
+    "time-series",
+    "land-surface-phenology",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: GIS",
+]
+dependencies = [
+    "numpy",
+    "scipy>=1.6",
+    "pandas",
+    "xarray>=2023.1",
+    "rioxarray",
+    "rasterio",
+    "rasterstats",
+    "shapely",
+    "tqdm",
+]
+
+[project.optional-dependencies]
+plot = ["matplotlib", "folium", "pyproj"]
+dask = ["dask[array]"]
+fit = ["whittaker-eilers", "pymannkendall"]
+kde = ["KDEpy"]
+fast = ["numba"]
+test = ["pytest", "pytest-cov", "ruff"]
+docs = ["mkdocs-material", "mkdocstrings[python]"]
+all = ["phenopy[plot,dask,fit,kde,fast]"]
+
+[project.urls]
+Homepage = "https://github.com/JavierLopatin/PhenoPY"
+Repository = "https://github.com/JavierLopatin/PhenoPY"
+
+[tool.hatch.version]
+path = "phenopy/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["phenopy"]
+# Ship only the small example rasters + date CSVs; keep big/decorative
+# assets and the notebook out of the wheel.
+exclude = [
+    "phenopy/ExampleData.ipynb",
+    "phenopy/.ipynb_checkpoints",
+    "phenopy/__pycache__",
+    "phenopy/data/kndvi_186.tif",
+    "phenopy/data/dates.txt",
+    "phenopy/data/*.png",
+    "phenopy/data/*.jpg",
+    "phenopy/data/*.svg",
+]
+
+[tool.hatch.build.targets.sdist]
+exclude = [
+    "phenopy/ExampleData.ipynb",
+    "phenopy/.ipynb_checkpoints",
+    "phenopy/data/kndvi_186.tif",
+    "phenopy/data/*.png",
+    "phenopy/data/*.jpg",
+    "phenopy/data/*.svg",
+    ".github",
+    "docs",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+# Many scientific expressions are intentionally long; don't fail on length.
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
