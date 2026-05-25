@@ -99,7 +99,13 @@ class Pheno:
 
         return stackP
 
-    def PhenoLSP(self, nGS: int | None = None, phentype: int = 1) -> xr.Dataset:
+    def PhenoLSP(
+        self,
+        nGS: int | None = None,
+        phentype: int = 1,
+        extraction: str | None = None,
+        extract_params: dict | None = None,
+    ) -> xr.Dataset:
         """
         Obtain land surface phenology metrics for a PhenoShape product
 
@@ -128,7 +134,14 @@ class Pheno:
         if nGS is None:
             nGS = self.kwargs["computePheno"]["nGS"]
 
-        kwargs_ = {"xnew": xnew, "nGS": nGS, "bands": self.LSP_bands, "phentype": phentype}
+        kwargs_ = {
+            "xnew": xnew,
+            "nGS": nGS,
+            "bands": self.LSP_bands,
+            "phentype": phentype,
+            "extraction": extraction,
+            "extract_params": extract_params,
+        }
 
         coords_ = {"doy": self.LSP_bands, "y": stack.coords["y"], "x": stack.coords["x"]}
         template_ = xr.DataArray(

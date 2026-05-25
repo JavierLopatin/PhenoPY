@@ -1,5 +1,4 @@
 import sys
-import warnings
 from functools import reduce
 
 import numpy as np
@@ -7,6 +6,7 @@ import xarray as xr
 from scipy.integrate import trapezoid
 from scipy.stats import skew
 
+from .extraction import get_extractor
 from .reconstruction import get_reconstructor
 
 
@@ -86,7 +86,7 @@ def _getPheno0(y, doy, interpolType, nan_replace, rollWindow, nGS, recon_params=
     return phen
 
 
-def _getLSPmetrics2(phen, xnew, nGS, bands, phentype):
+def _getLSPmetrics2(phen, xnew, nGS, bands, phentype=1, extraction=None, extract_params=None):
     """
     Obtain land surfurface phenology metrics
 
@@ -141,34 +141,12 @@ def _getLSPmetrics2(phen, xnew, nGS, bands, phentype):
         greenup = np.zeros([ratio.shape[0]], dtype=bool)
         greenup[dev > 0] = True
 
-        # select time where SOS and EOS are located (around trs value)
-        # KneeLocator looks for the inflection index in the curve
-        if phentype in [1, 2]:  # estimate SOS and EOS as median of the season
-            if phentype == 2:
-                warnings.warn("Type 2 is currently not implemented", DeprecationWarning)
-            i = np.median(xnew[: ipos[0]][greenup[: ipos[0]]])
-            ii = np.median(xnew[ipos[0] :][~greenup[ipos[0] :]])
-            sos = xnew[(np.abs(xnew - i)).argmin()]
-            eos = xnew[(np.abs(xnew - ii)).argmin()]
-            isos = np.where(xnew == int(sos))[0]
-            ieos = np.where(xnew == eos)[0]
-        #         elif phentype == 2:  # estimate SOS and EOS by inflection curves
-        #             #-- consider only observation before POS for SOS
-        #             knee1 = KneeLocator(xnew[0:ipos[0]], ratio[0:ipos[0]], S=2,
-        #                                 curve='convex', direction='increasing')
-        #             sos = knee1.knee
-        #             isos = np.where(xnew == knee1.knee)[0]
-
-        #             #-- consider only observation after POS for EOS
-        #             x = xnew[-(nGS - ipos[0] - 1):]
-        #             y = ratio[-(nGS - ipos[0] - 1):]
-        #             knee2 = KneeLocator(range(len(x)), np.flip(y), S=2,
-        #                                 curve='convex', direction='increasing')
-        #             eos = x[np.where(
-        #                 np.flip(range(len(x))) == knee2.knee)[0]][0]
-        #             ieos = np.where(xnew == eos)[0]
-        else:
-            print("phentype must be either 1 or 2")
+        # determine SOS / EOS via the selected extraction method (axis 3)
+        if extraction is None:
+            extraction = "seasonal_median"  # historical phentype 1/2 behavior
+        sos, eos, isos, ieos = get_extractor(extraction)(
+            phen, xnew, ratio, greenup, ipos, **(extract_params or {})
+        )
         if sos is None:
             isos = 0
             sos = xnew[isos]
@@ -259,9 +237,11 @@ def _getPheno2D(
     return _assemble(ans, dstack, {"time": xnew}, True)
 
 
-def _parseLSP(dstack, xnew, nGS, bands, phentype):
+def _parseLSP(dstack, xnew, nGS, bands, phentype, extraction=None, extract_params=None):
     # num=len(bandNames) = 16
-    ans = np.apply_along_axis(_getLSPmetrics2, 0, dstack, xnew, nGS, bands, phentype)
+    ans = np.apply_along_axis(
+        _getLSPmetrics2, 0, dstack, xnew, nGS, bands, phentype, extraction, extract_params
+    )
 
     return _assemble(ans, dstack, {"doy": bands}, True)
 
