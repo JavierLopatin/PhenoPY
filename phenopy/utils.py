@@ -5,8 +5,9 @@ from functools import reduce
 import numpy as np
 import xarray as xr
 from scipy.integrate import trapezoid
-from scipy.interpolate import Rbf, interp1d
 from scipy.stats import skew
+
+from .reconstruction import get_reconstructor
 
 
 def reorder_southern_hemisphere(img: xr.Dataset) -> tuple:
@@ -41,42 +42,33 @@ def reorder_southern_hemisphere(img: xr.Dataset) -> tuple:
     return positions, da
 
 
-def _getPheno(y, x, nGS, interpolType):
+def _getPheno(y, x, nGS, interpolType, recon_params=None):
     """
-    Apply linear interpolation in the 'time' axis
+    Reconstruct a regular phenological curve from an irregular (doy, value) series.
+
     x: DOY values
     y: ndarray with VI values
+    interpolType: reconstruction method name (see ``phenopy.reconstruction``)
+    recon_params: optional dict of method-specific parameters
     """
     inds = np.isnan(y)  # check if array has NaN values
     if np.sum(inds) == len(y):  # check if all values are NaN
         return y[0:nGS]
-    else:
-        try:
-            xnew = np.linspace(np.min(x), np.max(x), nGS, dtype=np.int32)
-            if inds.any():  # if inds have at least one True
-                y = _fillNaN(y)
-                _replaceElements(x)  # replace doy values when they are the same
-            if interpolType == "linear":
-                ynew = np.interp(xnew, x, y)
-            elif interpolType == "RBF":
-                f = Rbf(
-                    x, y, function="cubic"
-                )  # you had a typo here 'funciton' instead of 'function'
-                ynew = f(xnew)
-            elif interpolType == "KDE":
-                ynew = _KDE(x, y, nGS)
-            else:
-                f = interp1d(x, y, kind=interpolType)
-                ynew = f(xnew)
-            return ynew  # Moved this line to be outside the if-elif-else chain
-        except Exception as e:  # It's good to handle exceptions in the try block
-            print(f"An error occurred: {e}")
-            return None
+    try:
+        xnew = np.linspace(np.min(x), np.max(x), nGS, dtype=np.int32)
+        if inds.any():  # if inds have at least one True
+            y = _fillNaN(y)
+            _replaceElements(x)  # replace doy values when they are the same
+        reconstruct = get_reconstructor(interpolType)
+        ynew = reconstruct(x, y, xnew, **(recon_params or {}))
+        return ynew
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return np.full(nGS, np.nan)
 
 
-def _getPheno0(y, doy, interpolType, nan_replace, rollWindow, nGS):
-
-    # replace nan_relace values by NaN
+def _getPheno0(y, doy, interpolType, nan_replace, rollWindow, nGS, recon_params=None):
+    # replace nan_replace values by NaN
     if nan_replace is not None:
         y = np.where(y == nan_replace, np.nan, y)
 
@@ -84,24 +76,8 @@ def _getPheno0(y, doy, interpolType, nan_replace, rollWindow, nGS):
     idx = doy.argsort()
     y = y[idx]
 
-    # prepare tails for interpolation
-    """
-    minn = np.nanmin(y)
-    start = y[0:3]
-    end = y[-3:]
-    if np.all( np.isnan(start) ):
-        y[0:3] = minn
-    if np.all( np.isnan(end) ):
-        y[-3:] = minn
-    """
-    # get phenological shape
-    phen = _getPheno(
-        y,
-        doy[idx],
-        # doy,
-        nGS,
-        interpolType,
-    )
+    # get phenological shape (reconstruction)
+    phen = _getPheno(y, doy[idx], nGS, interpolType, recon_params=recon_params)
 
     # rolling average using moving window
     if rollWindow is not None:
@@ -265,10 +241,12 @@ def _getLSPmetrics2(phen, xnew, nGS, bands, phentype):
         return metrics
 
 
-def _getPheno2D(dstack, doy, interpolType, nan_replace, rollWindow, nGS, xnew=None):
+def _getPheno2D(
+    dstack, doy, interpolType, nan_replace, rollWindow, nGS, xnew=None, recon_params=None
+):
     # dstack.doy
     ans = np.apply_along_axis(
-        _getPheno0, 0, dstack, doy, interpolType, nan_replace, rollWindow, nGS
+        _getPheno0, 0, dstack, doy, interpolType, nan_replace, rollWindow, nGS, recon_params
     )
 
     # TODO: ¿_getPheno0 cambia el orden del arreglo? si es así, debo corregir - DONE?
@@ -314,39 +292,6 @@ def _rmse(computed_stack, original_stack, normalized=False):
         return rmse / (maxx - minn)
     else:
         return rmse
-
-
-def _KDE(x, y, nGS):
-    """Compute a bivariate kde using KDEpy (optional dependency)."""
-    try:
-        from KDEpy import FFTKDE
-    except ImportError as exc:
-        raise ImportError(
-            "KDE reconstruction requires the optional 'KDEpy' package. "
-            "Install it with `pip install KDEpy` (or the project's [kde] extra)."
-        ) from exc
-
-    # Grid points in the x and y direction
-    grid_points_x, grid_points_y = nGS + 6, 2**8
-
-    # Stack the data for 2D input, compute the KDE
-    data = np.vstack((x, y)).T
-    kde = FFTKDE(bw=0.025).fit(data)
-    grid, points = kde.evaluate((grid_points_x, grid_points_y))
-
-    # Retrieve grid values, reshape output and plot boundaries
-    x2, y2 = np.unique(grid[:, 0]), np.unique(grid[:, 1])
-    z = points.reshape(grid_points_x, grid_points_y)
-
-    # Compute y_pred = E[y | x] = sum_y p(y | x) * y
-    y_pred = np.sum((z.T / np.sum(z, axis=1)).T * y2, axis=1)
-    id = np.where(x2 < np.min(x))
-    x2 = np.delete(x2, id)
-    y_pred = np.delete(y_pred, id)
-    id = np.where(x2 > np.max(x))
-    y_pred = np.delete(y_pred, id)
-
-    return y_pred
 
 
 def computeChunkSize(arr, sizeMB=100, Z="time"):
