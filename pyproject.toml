@@ -48,7 +48,7 @@ fit = ["whittaker-eilers", "pymannkendall"]
 kde = ["KDEpy"]
 fast = ["numba"]
 test = ["pytest", "pytest-cov", "ruff"]
-docs = ["mkdocs-material", "mkdocstrings[python]"]
+docs = ["mkdocs-material", "mkdocstrings[python]", "ipykernel", "nbconvert"]
 all = ["phenopy[plot,fit,kde,fast]"]
 
 [project.urls]

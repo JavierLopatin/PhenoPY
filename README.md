@@ -71,7 +71,9 @@ ts = da.pheno.get_timeseries_metrics(window_length=3, metric=["sos", "pos", "eos
 ```
 
 A full walk-through is in the example notebook:
-[`phenopy/ExampleData.ipynb`](https://github.com/JavierLopatin/PhenoPY/blob/master/phenopy/ExampleData.ipynb).
+[`phenopy/ExampleData.ipynb`](https://github.com/JavierLopatin/PhenoPY/blob/master/phenopy/ExampleData.ipynb),
+and an **executed tutorial exercising every function** is in
+[`examples/tutorial.ipynb`](examples/tutorial.ipynb).
 The example SIF data is a small sample over Chile, derived from
 [Chen et al. (2022)](https://www.nature.com/articles/s41597-022-01520-1).
 
