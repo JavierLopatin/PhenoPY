@@ -273,10 +273,14 @@ def PhenoPlot(
 
 def _relabel_southern(ax):
     """Relabel x-ticks (day-of-season positions) as real Southern-Hemisphere
-    calendar DOY: position ``p`` -> ``((p + 182) % 365) + 1``."""
-    ticks = ax.get_xticks()
+    calendar DOY (position ``p`` -> ``((p + 182) % 365) + 1``), keeping the
+    data-driven axis limits (``set_xticks`` would otherwise expand the view to
+    the locator's out-of-range ticks)."""
+    xlim = ax.get_xlim()
+    ticks = [t for t in ax.get_xticks() if xlim[0] <= t <= xlim[1]]
     ax.set_xticks(ticks)
     ax.set_xticklabels([int(((t + 182) % 365) + 1) for t in ticks])
+    ax.set_xlim(xlim)
 
 
 def plot_with_southern_doy(shape, coordinates, ylabel="NDVI", title=None):
