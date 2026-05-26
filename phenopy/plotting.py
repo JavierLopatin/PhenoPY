@@ -129,6 +129,9 @@ def PhenoPlot(
     threshold=300,
     ylab="NDVI",
     ax=None,
+    southern=False,
+    cmap="viridis",
+    many_years=8,
 ):
     """
     Plot the PhenoShape curve along with the yearly data
@@ -167,53 +170,79 @@ def PhenoPlot(
             default is 46; one per week
     - ylab: string
             Label of the Y axis [default "NDVI"]
+    - southern: bool
+            Reorder/relabel the x-axis to Southern-Hemisphere day-of-year so the
+            austral growing season is centred [default False]
+    - cmap: string
+            Colormap used when there are many years [default "viridis"]
+    - many_years: int
+            Above this many years, points are coloured by a continuous palette
+            with a colorbar instead of a per-year legend [default 8]
 
     """
 
-    # Get the values for the specified X and Y
-    doy = stack.doy.values  # .where(img.year == 2017, drop=True).doy.values
-    dates = stack.time  # .where(img.year == 2017, drop=True).time
-    # sorted_indices = np.argsort(doy)
-    # Reorder the time dimension using the sorted indices
-    # stack = stack.isel(time=sorted_indices)
-    # Get the values for the specified X and Y
+    # Get the per-pixel time series
+    doy = stack.doy.values
+    dates = stack.time
     valuesTSS = stack.sel(x=X, y=Y, method="nearest").values
 
-    # create a DataFrame for further processing
     valuesTSSpd = pd.DataFrame(
-        {"dates": dates, "doy": dates.dt.dayofyear, "year": dates.dt.year, "VI": valuesTSS}
+        {"doy": dates.dt.dayofyear, "year": dates.dt.year, "VI": valuesTSS}
     ).sort_values("doy")
 
-    # group values according to year
-    groups = valuesTSSpd.groupby("year")
-    # get phenological shape
+    # Southern Hemisphere: map calendar DOY -> day-of-season (austral year ~1 July)
+    if southern:
+        cd = valuesTSSpd["doy"].values
+        plot_doy = np.where(cd >= 183, cd - 183, cd + 182)
+        fit_doy = np.where(doy >= 183, doy - 183, doy + 182)
+        xlabel = "Day of season (Southern Hemisphere)"
+    else:
+        plot_doy = valuesTSSpd["doy"].values
+        fit_doy = doy
+        xlabel = "Day of the year"
+    valuesTSSpd["pdoy"] = plot_doy
+
     phen = _getPheno0(
         y=valuesTSS,
-        doy=doy,
+        doy=fit_doy,
         interpolType=interpolType,
-        nan_replace=None,
+        nan_replace=nan_replace,
         rollWindow=rollWindow,
         nGS=nGS,
     )
-    # doy of the predicted phenological shape
-    xnew = np.linspace(np.min(valuesTSSpd.doy), np.max(valuesTSSpd.doy), nGS, dtype="int16")
+    xnew = np.linspace(np.min(plot_doy), np.max(plot_doy), nGS, dtype="int16")
 
-    # Check if ax is provided, if not create one
     if ax is None:
-        fig, ax = plt.subplots()
+        _, ax = plt.subplots()
 
-    # plot
     if plotType == 1:
-        for name, group in groups:
-            ax.plot(group.doy, group.VI, marker="o", linestyle="", ms=10, label=name)
-        ax.plot(xnew, phen, "-", color="black")
-        ax.legend(prop={"size": legendsize})
+        years = sorted(valuesTSSpd["year"].unique())
+        if len(years) > many_years:
+            # many years -> continuous palette + colorbar (instead of a large legend)
+            sm = plt.cm.ScalarMappable(norm=plt.Normalize(min(years), max(years)), cmap=cmap)
+            sm.set_array([])
+            for name, group in valuesTSSpd.groupby("year"):
+                ax.plot(group["pdoy"], group["VI"], "o", ms=5, color=sm.to_rgba(name))
+            ax.figure.colorbar(sm, ax=ax, pad=0.01).set_label("year", fontsize=fontsize)
+        else:
+            for name, group in valuesTSSpd.groupby("year"):
+                ax.plot(group["pdoy"], group["VI"], "o", ms=8, label=int(name))
+            # legend outside the plot, on the left
+            ax.legend(
+                loc="center right",
+                bbox_to_anchor=(-0.12, 0.5),
+                fontsize=legendsize,
+                title="year",
+                frameon=False,
+            )
+        ax.plot(xnew, phen, "-", color="black", lw=2)
         ax.tick_params(labelsize=labelsize)
         if ylim is not None:
             ax.set_ylim(ylim[0], ylim[1])
-
         ax.set_ylabel(ylab, fontsize=fontsize)
-        ax.set_xlabel("Day of the year", fontsize=fontsize)
+        ax.set_xlabel(xlabel, fontsize=fontsize)
+        if southern:
+            _relabel_southern(ax)
 
     elif plotType == 2:
         # get position of SOS, POS, and EOS
@@ -225,15 +254,29 @@ def PhenoPlot(
         ax.plot(xnew[isos], phen[isos], "X", markersize=15, label="SOS")
         ax.plot(xnew[ipos], phen[ipos], "X", markersize=15, label="POS")
         ax.plot(xnew[ieos], phen[ieos], "X", markersize=15, label="EOS")
-
-        ax.legend(prop={"size": 12})
+        ax.legend(
+            loc="center right", bbox_to_anchor=(-0.12, 0.5), fontsize=legendsize, frameon=False
+        )
         ax.tick_params(labelsize=labelsize)
         if ylim is not None:
             ax.set_ylim(ylim[0], ylim[1])
         ax.set_ylabel(ylab, fontsize=fontsize)
-        ax.set_xlabel("Day of the year", fontsize=fontsize)
+        ax.set_xlabel(xlabel, fontsize=fontsize)
+        if southern:
+            _relabel_southern(ax)
+
+    if saveFigure is not None:
+        ax.figure.savefig(saveFigure, bbox_inches="tight")
 
     return ax
+
+
+def _relabel_southern(ax):
+    """Relabel x-ticks (day-of-season positions) as real Southern-Hemisphere
+    calendar DOY: position ``p`` -> ``((p + 182) % 365) + 1``."""
+    ticks = ax.get_xticks()
+    ax.set_xticks(ticks)
+    ax.set_xticklabels([int(((t + 182) % 365) + 1) for t in ticks])
 
 
 def plot_with_southern_doy(shape, coordinates, ylabel="NDVI", title=None):
