@@ -276,7 +276,11 @@ class Pheno:
                 dims=original_stack.dims,
                 coords=original_stack.coords,
                 attrs=original_stack.attrs,
-            ).chunk(computed_stack.chunks)
+            )
+            # match the input's chunking only when it is actually dask-backed
+            # (``.chunk(None)`` is deprecated)
+            if computed_stack.chunks is not None:
+                temp_ = temp_.chunk(computed_stack.chunksizes)
 
             sosm = computed_stack.where(temp_ >= sos)
             eosm = computed_stack.where(temp_ <= eos)
