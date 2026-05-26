@@ -22,9 +22,11 @@
 
 ::: phenopy.extraction.list_extractors
 
-## Curvature
+## Shape analysis
 
 ::: phenopy.curvature.get_curvature
+
+::: phenopy.season.n_seasons
 
 ## I/O
 

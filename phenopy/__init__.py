@@ -13,6 +13,7 @@ from .extraction import list_extractors  # noqa: F401
 from .io import list_samples, load_sample  # noqa: F401
 from .phenopy import Pheno  # noqa: F401
 from .reconstruction import list_reconstructors  # noqa: F401
+from .season import n_seasons  # noqa: F401
 from .trends import trend  # noqa: F401
 from .utils import reorder_southern_hemisphere  # noqa: F401
 
@@ -29,5 +30,6 @@ __all__ = [
     "list_extractors",
     "trend",
     "anomaly",
+    "n_seasons",
     "__version__",
 ]

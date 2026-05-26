@@ -35,7 +35,7 @@ ts = da.pheno.get_timeseries_metrics(window_length=3, metric=["sos", "pos", "eos
 ## Trends and anomalies
 
 ```python
-from phenopy import anomaly, trend
+from phenopy import anomaly, n_seasons, trend
 
 # Interannual trend of start-of-season: Theil-Sen slope + Mann-Kendall p-value
 ts = da.pheno.get_timeseries_metrics(window_length=3, metric=["sos"])
@@ -43,6 +43,9 @@ sos_trend = trend(ts["sos"])
 
 # Per-observation phenological anomalies + RFD percentile (npphen-style)
 an = anomaly(da)   # -> Dataset with `anomaly`, `z`, `rfd`
+
+# Number of growing seasons per pixel (multi-cropping / bimodal vegetation)
+nos = n_seasons(da.pheno.PhenoShape())
 ```
 
 ## Southern Hemisphere
