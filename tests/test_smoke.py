@@ -24,6 +24,8 @@ LSP_BANDS = [
     "rog",
     "ros",
     "sw",
+    "trough",
+    "mos",
 ]
 
 
@@ -58,7 +60,7 @@ def test_phenoshape_then_phenolsp_pipeline():
 
     lsp = shape.pheno.PhenoLSP().compute()
 
-    # All 16 land-surface-phenology bands are present...
+    # All 18 land-surface-phenology bands are present...
     assert set(lsp.data_vars) == set(LSP_BANDS)
     # ...spatial dims are preserved...
     assert lsp.sizes["y"] == da.sizes["y"]

@@ -1,10 +1,9 @@
 """Golden regression tests.
 
-Freeze the 16 land-surface-phenology metrics computed by the *current* code on
-the bundled sample datasets. The upcoming composable refactor (Phase 2) must
-reproduce these numbers within tolerance, so any silent numerical drift fails
-the test. Regenerate the ``.npz`` snapshots with ``tests/golden/_generate.py``
-only when a change to the output is intended and reviewed.
+Freeze the land-surface-phenology metrics computed by the *current* code on the
+bundled sample datasets, so any silent numerical drift fails the test. Regenerate
+the ``.npz`` snapshots with ``tests/golden/_generate.py`` only when a change to the
+output is intended and reviewed (as when ``trough``/``mos`` were added).
 """
 
 from pathlib import Path

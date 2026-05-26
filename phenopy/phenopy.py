@@ -355,6 +355,8 @@ class Pheno:
             "rog": [],
             "ros": [],
             "sw": [],
+            "trough": [],
+            "mos": [],
             # "rmse": [],
             "curvature": [],
         }
@@ -425,6 +427,8 @@ class Pheno:
             metrics_dict["rog"].append(lsp.rog)
             metrics_dict["ros"].append(lsp.ros)
             metrics_dict["sw"].append(lsp.sw)
+            metrics_dict["trough"].append(lsp.trough)
+            metrics_dict["mos"].append(lsp.mos)
             metrics_dict["curvature"].append(curvature_val)
 
         # concatenate the lists of each metric into a single xarray DataArray

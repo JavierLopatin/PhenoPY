@@ -9,7 +9,7 @@ from scipy.stats import skew
 from .extraction import get_extractor
 from .reconstruction import get_reconstructor
 
-# Canonical order of the 16 land-surface-phenology bands from _getLSPmetrics2.
+# Canonical order of the 18 land-surface-phenology bands from _getLSPmetrics2.
 LSP_BANDS = [
     "sos",
     "pos",
@@ -27,6 +27,8 @@ LSP_BANDS = [
     "rog",
     "ros",
     "sw",
+    "trough",
+    "mos",
 ]
 
 
@@ -153,6 +155,8 @@ def _getLSPmetrics2(phen, xnew, nGS, bands, phentype=1, extraction=None, extract
         ROG = Rate of greening [slope SOS-POS]
         ROS = Rate of senescence [slope POS-EOS]
         SW = Skewness of growing season
+        TROUGH = Trough / base value (minimum of the curve, in value units)
+        MOS = Middle of season (DOY, midpoint between SOS and EOS)
     """
     inds = np.isnan(phen)  # check if array has NaN values
     if inds.any():  # check is all values are NaN
@@ -229,6 +233,10 @@ def _getLSPmetrics2(phen, xnew, nGS, bands, phentype=1, extraction=None, extract
         # rate of senescence [slope POS-EOS]
         ros = (phen[ieos] - vpos) / (eos - pos)
 
+        # middle of season: midpoint DOY between SOS and EOS (NaN when LOS is)
+        mos = (sos + eos) / 2.0 if not np.isnan(los) else np.nan
+        # trough/base value already computed above as ``trough = np.min(phen)``
+
         metrics = np.array(
             (
                 sos,
@@ -247,6 +255,8 @@ def _getLSPmetrics2(phen, xnew, nGS, bands, phentype=1, extraction=None, extract
                 rog[0],
                 ros[0],
                 sw,
+                trough,
+                mos,
             )
         )
 
