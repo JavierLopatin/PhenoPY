@@ -10,6 +10,18 @@
         - RMSE
         - get_timeseries_metrics
 
+## Analysis layers
+
+::: phenopy.trends.trend
+
+::: phenopy.anomaly.anomaly
+
+## Method registries
+
+::: phenopy.reconstruction.list_reconstructors
+
+::: phenopy.extraction.list_extractors
+
 ## Curvature
 
 ::: phenopy.curvature.get_curvature

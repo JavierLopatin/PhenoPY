@@ -7,6 +7,7 @@ other phenology methods become available.
 
 # Importing the accessor module runs the ``@xr.register_dataarray_accessor``
 # decorator as a side effect, registering the ``pheno`` namespace.
+from .anomaly import anomaly  # noqa: F401
 from .curvature import classify_vector_numeric, get_curvature  # noqa: F401
 from .extraction import list_extractors  # noqa: F401
 from .io import list_samples, load_sample  # noqa: F401
@@ -27,5 +28,6 @@ __all__ = [
     "list_reconstructors",
     "list_extractors",
     "trend",
+    "anomaly",
     "__version__",
 ]
