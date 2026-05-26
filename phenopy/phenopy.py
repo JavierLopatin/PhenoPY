@@ -18,7 +18,7 @@ from . import _numba
 from .curvature import get_curvature
 
 # functions from sibling modules
-from .utils import _getLSPmetrics2, _getPheno0, _rmse
+from .utils import LSP_BANDS, _getLSPmetrics2, _getPheno0, _rmse
 
 
 @xr.register_dataarray_accessor("pheno")
@@ -26,24 +26,7 @@ class Pheno:
     def __init__(self, xr_obj: xr.DataArray) -> None:
         self._obj = xr_obj
         self.kwargs = {}
-        self.LSP_bands = [
-            "sos",
-            "pos",
-            "eos",
-            "vsos",
-            "vpos",
-            "veos",
-            "los",
-            "msp",
-            "mau",
-            "vmsp",
-            "vmau",
-            "ampl",
-            "ios",
-            "rog",
-            "ros",
-            "sw",
-        ]
+        self.LSP_bands = list(LSP_BANDS)
 
     def PhenoShape(
         self,

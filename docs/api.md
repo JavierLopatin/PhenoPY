@@ -16,6 +16,8 @@
 
 ::: phenopy.anomaly.anomaly
 
+::: phenopy.uncertainty.uncertainty
+
 ## Method registries
 
 ::: phenopy.reconstruction.list_reconstructors

@@ -35,7 +35,7 @@ ts = da.pheno.get_timeseries_metrics(window_length=3, metric=["sos", "pos", "eos
 ## Trends and anomalies
 
 ```python
-from phenopy import anomaly, n_seasons, trend
+from phenopy import anomaly, n_seasons, trend, uncertainty
 
 # Interannual trend of start-of-season: Theil-Sen slope + Mann-Kendall p-value
 ts = da.pheno.get_timeseries_metrics(window_length=3, metric=["sos"])
@@ -46,6 +46,9 @@ an = anomaly(da)   # -> Dataset with `anomaly`, `z`, `rfd`
 
 # Number of growing seasons per pixel (multi-cropping / bimodal vegetation)
 nos = n_seasons(da.pheno.PhenoShape())
+
+# Bootstrap uncertainty (std) of each of the 16 metrics, per pixel
+unc = uncertainty(da, n_boot=50)
 ```
 
 ## Southern Hemisphere

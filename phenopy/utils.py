@@ -9,6 +9,26 @@ from scipy.stats import skew
 from .extraction import get_extractor
 from .reconstruction import get_reconstructor
 
+# Canonical order of the 16 land-surface-phenology bands from _getLSPmetrics2.
+LSP_BANDS = [
+    "sos",
+    "pos",
+    "eos",
+    "vsos",
+    "vpos",
+    "veos",
+    "los",
+    "msp",
+    "mau",
+    "vmsp",
+    "vmau",
+    "ampl",
+    "ios",
+    "rog",
+    "ros",
+    "sw",
+]
+
 
 def reorder_southern_hemisphere(img: xr.Dataset) -> tuple:
     """

@@ -15,6 +15,7 @@ from .phenopy import Pheno  # noqa: F401
 from .reconstruction import list_reconstructors  # noqa: F401
 from .season import n_seasons  # noqa: F401
 from .trends import trend  # noqa: F401
+from .uncertainty import uncertainty  # noqa: F401
 from .utils import reorder_southern_hemisphere  # noqa: F401
 
 __version__ = "0.1.0"
@@ -31,5 +32,6 @@ __all__ = [
     "trend",
     "anomaly",
     "n_seasons",
+    "uncertainty",
     "__version__",
 ]
