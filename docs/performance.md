@@ -18,12 +18,26 @@ The time axis is always kept whole (each pixel needs its full series); only the
 spatial dimensions are tiled. This keeps peak memory bounded and lets you
 process rasters larger than RAM.
 
-## Parallelism and the GIL
+## Numba fast path (linear)
 
-The per-pixel kernels are currently pure-Python (via `numpy.vectorize`), so the
-default *threaded* Dask scheduler does not give CPU speed-up — the GIL
-serialises Python work, so its benefit is **memory**, not wall-clock. For CPU
-parallelism today, use a *process*-based scheduler:
+When the `[fast]` extra (numba) is installed, **linear** `PhenoShape` on an
+in-memory raster automatically uses a GIL-releasing, Numba-parallel kernel — a
+real multi-core speed-up over the pure-Python path, with identical results. No
+code change is needed; it is used whenever the inputs are eligible (linear
+method, in memory, no NaNs, no custom params).
+
+```python
+shape = da.pheno.PhenoShape(interpolType="linear")  # uses the Numba kernel if available
+```
+
+See `benchmarks/bench.py` for a numba-vs-pure-Python comparison.
+
+## Parallelism and the GIL (other methods)
+
+Non-linear reconstruction methods and the metric extraction still run a
+pure-Python kernel (via `numpy.vectorize`). There, the GIL means the default
+*threaded* Dask scheduler helps **memory**, not wall-clock; use a
+*process*-based scheduler for CPU parallelism:
 
 ```python
 import dask
@@ -32,8 +46,8 @@ with dask.config.set(scheduler="processes"):
     lsp = shape.pheno.PhenoLSP().compute()
 ```
 
-A Numba-accelerated kernel (which releases the GIL and gives in-thread
-speed-ups) is on the roadmap as the `[fast]` extra.
+Numba acceleration of the metric extraction and the other reconstruction
+methods is planned.
 
 ## Choosing chunk sizes
 

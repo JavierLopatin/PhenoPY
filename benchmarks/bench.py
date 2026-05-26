@@ -1,24 +1,22 @@
-"""Quick benchmark of PhenoShape -> PhenoLSP: eager vs Dask (threads / processes).
+"""Benchmark the Numba fast path for linear PhenoShape against pure-Python.
 
 Run from the repo root in the dev env::
 
     python benchmarks/bench.py
 
-The point of this benchmark is to show (a) that the chunked Dask path produces
-identical results to the eager path, and (b) the real wall-clock trade-offs.
-Because the per-pixel kernels are pure-Python (numpy.vectorize), the *threaded*
-scheduler mainly helps memory, not speed (the GIL); a *process* scheduler gives
-CPU parallelism at the cost of serialisation overhead. A Numba ``[fast]`` kernel
-(GIL-releasing) is on the roadmap for in-thread speedups.
+PhenoShape's linear reconstruction uses a GIL-releasing, Numba-parallel kernel
+when the ``[fast]`` extra (numba) is installed and the raster is in memory. This
+script times that kernel against the pure-Python path on the same data and
+checks the results are identical.
 """
 
 import time
 
-import dask
 import numpy as np
 import xarray as xr
 
 import phenopy  # noqa: F401  (registers the `pheno` accessor)
+from phenopy import _numba
 from phenopy.io import load_sample
 
 
@@ -29,30 +27,39 @@ def tile(da, reps):
     return big.assign_coords(y=np.arange(big.sizes["y"]), x=np.arange(big.sizes["x"]))
 
 
-def run(da, chunks=None):
+def time_phenoshape(da):
     t0 = time.perf_counter()
-    shape = da.pheno.PhenoShape(rollWindow=5, nGS=52, chunks=chunks)
-    lsp = shape.pheno.PhenoLSP().compute()
-    return time.perf_counter() - t0, lsp
+    out = da.pheno.PhenoShape(interpolType="linear", rollWindow=5, nGS=52)
+    np.asarray(out.values)  # realise the computation
+    return time.perf_counter() - t0, out
 
 
 def main():
-    da = tile(load_sample("SIF"), reps=4)
+    da = tile(load_sample("SIF"), reps=5)
     npix = da.sizes["y"] * da.sizes["x"]
     print(f"raster: {dict(da.sizes)}  ({npix} pixels, {da.sizes['time']} time steps)")
+    print(f"numba available: {_numba.NUMBA_AVAILABLE}")
 
-    t_eager, lsp_eager = run(da)
-    print(f"eager (numpy)              : {t_eager:6.2f} s")
+    if _numba.NUMBA_AVAILABLE:
+        # warm up the JIT so the timing reflects steady state, not compilation
+        load_sample("SIF").pheno.PhenoShape(interpolType="linear", nGS=52)
 
-    t_threads, lsp_threads = run(da, chunks={"x": 20, "y": 20})
-    print(f"dask threads (20x20 chunks): {t_threads:6.2f} s")
+    t_numba, out_numba = time_phenoshape(da)
+    print(f"PhenoShape linear (numba)       : {t_numba:6.2f} s")
 
-    with dask.config.set(scheduler="processes"):
-        t_proc, _ = run(da, chunks={"x": 20, "y": 20})
-    print(f"dask processes (20x20)     : {t_proc:6.2f} s   speedup x{t_eager / t_proc:.2f}")
+    orig = _numba.NUMBA_AVAILABLE
+    _numba.NUMBA_AVAILABLE = False
+    try:
+        t_py, out_py = time_phenoshape(da)
+    finally:
+        _numba.NUMBA_AVAILABLE = orig
+    print(f"PhenoShape linear (pure-Python) : {t_py:6.2f} s")
 
-    np.testing.assert_allclose(lsp_eager["sos"].values, lsp_threads["sos"].values, equal_nan=True)
-    print("results identical (eager == dask)")
+    if t_numba > 0:
+        print(f"speedup (numba vs pure-Python)  : x{t_py / t_numba:.1f}")
+
+    np.testing.assert_allclose(out_numba.values, out_py.values, rtol=1e-5, equal_nan=True)
+    print("results identical (numba == pure-Python)")
 
 
 if __name__ == "__main__":

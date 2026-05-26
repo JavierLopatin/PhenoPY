@@ -14,6 +14,7 @@ import warnings
 import numpy as np
 import xarray as xr  # manipulate 3D time-series rasters
 
+from . import _numba
 from .curvature import get_curvature
 
 # functions from sibling modules
@@ -71,6 +72,33 @@ class Pheno:
         stack = self._obj
         doy = stack.doy.values
         xnew = np.linspace(np.min(doy), np.max(doy), nGS, dtype=np.int32)
+
+        # Fast path: Numba-parallel linear reconstruction for in-memory rasters.
+        # Only used where it provably matches the pure-Python path.
+        if (
+            _numba.NUMBA_AVAILABLE
+            and interpolType == "linear"
+            and recon_params is None
+            and nan_replace is None
+            and chunks is None
+            and stack.chunks is None
+            and (rollWindow is None or (isinstance(rollWindow, int) and rollWindow % 2 == 1))
+        ):
+            arr = np.asarray(stack.transpose("time", "y", "x").values, dtype=np.float64)
+            if not np.isnan(arr).any():
+                idx = np.argsort(np.asarray(doy)).astype(np.int64)
+                out = _numba.linear_phenoshape(
+                    arr,
+                    idx,
+                    np.asarray(doy, dtype=np.float64),
+                    np.asarray(xnew, dtype=np.float64),
+                    int(rollWindow or 0),
+                )
+                return xr.DataArray(
+                    out,
+                    dims=("doy", "y", "x"),
+                    coords={"doy": xnew, "y": stack.coords["y"], "x": stack.coords["x"]},
+                )
 
         # drop the time-associated coords so the new 'doy' output dim can't
         # clash with the input 'doy' coordinate
