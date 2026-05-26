@@ -3,9 +3,9 @@
 import numpy as np
 import pytest
 
-import phenopy  # noqa: F401  (registers the accessor)
-from phenopy.extraction import get_extractor, list_extractors
-from phenopy.io import load_sample
+import phenosensing  # noqa: F401  (registers the accessor)
+from phenosensing.extraction import get_extractor, list_extractors
+from phenosensing.io import load_sample
 
 METHODS = ["seasonal_median", "trs", "der", "curvature"]
 

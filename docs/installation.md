@@ -1,6 +1,6 @@
 # Installation
 
-PhenoPY is being prepared for a PyPI/conda release. For now, install from source.
+PhenoSensing is being prepared for a PyPI/conda release. For now, install from source.
 
 ## Conda development environment (recommended)
 
@@ -8,10 +8,10 @@ The geospatial stack (GDAL / rasterio / rioxarray) resolves most reliably on
 conda-forge:
 
 ```bash
-git clone https://github.com/JavierLopatin/PhenoPY.git
-cd PhenoPY
+git clone https://github.com/JavierLopatin/PhenoSensing.git
+cd PhenoSensing
 conda env create -f environment-dev.yml
-conda activate phenopy
+conda activate phenosensing
 pip install -e ".[fit,plot,test]"
 ```
 

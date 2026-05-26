@@ -1,6 +1,6 @@
 <h1 align="center">
-<a href='https://github.com/JavierLopatin/PhenoPY'><img src='phenopy/data/logo.svg' align="right" height="300" /></a>
-PhenoPY
+<a href='https://github.com/JavierLopatin/PhenoSensing'><img src='phenosensing/data/logo.svg' align="right" height="300" /></a>
+PhenoSensing
 </h1>
 
 <h4 align="center">Land surface phenology from satellite image time series, built on xarray and Dask</h4>
@@ -10,7 +10,7 @@ PhenoPY
   <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="MIT License">
 </p>
 
-PhenoPY reconstructs a smoothed seasonal *phenological shape* for every pixel of
+PhenoSensing reconstructs a smoothed seasonal *phenological shape* for every pixel of
 a vegetation-index (NDVI, EVI, kNDVI, SIF, …) time series and extracts **16
 land-surface-phenology (LSP) metrics** from it, with first-class support for
 **interannual** analysis and the **Southern Hemisphere**.
@@ -27,23 +27,22 @@ land-surface-phenology (LSP) metrics** from it, with first-class support for
 - **Dask-aware** for larger-than-memory rasters.
 
 > [!NOTE]
-> PhenoPY is being modernized toward a PyPI/conda release. The core accessor API
-> is stable; state-of-the-art reconstruction (double-logistic, Whittaker,
-> Savitzky-Golay) and extraction (threshold, derivative, curvature) methods are
-> being added. The distribution name on PyPI is being finalized (`phenopy` is
-> already taken there); the import name remains `phenopy`.
+> PhenoSensing is the modernized successor to **PhenoPY**, renamed because
+> `phenopy` is taken on PyPI by an unrelated clinical-phenotyping tool. It
+> installs and imports as **`phenosensing`** (the xarray accessor stays
+> `da.pheno`). A PyPI/conda release is in preparation.
 
 ## Installation
 
 From source for now (a PyPI/conda release is in progress):
 
 ```bash
-git clone https://github.com/JavierLopatin/PhenoPY.git
-cd PhenoPY
+git clone https://github.com/JavierLopatin/PhenoSensing.git
+cd PhenoSensing
 
 # Recommended: conda dev environment (reliable geospatial stack)
 conda env create -f environment-dev.yml
-conda activate phenopy
+conda activate phenosensing
 pip install -e ".[fit,plot,test]"
 ```
 
@@ -54,8 +53,8 @@ Optional extras: `plot` (matplotlib/folium/pyproj), `fit`
 ## Quickstart
 
 ```python
-import phenopy
-from phenopy import load_sample
+import phenosensing
+from phenosensing import load_sample
 
 # Bundled example: SIF time series over Chile (2001-2020)
 da = load_sample("SIF")          # (time, y, x) with doy/year coords
@@ -71,7 +70,7 @@ ts = da.pheno.get_timeseries_metrics(window_length=3, metric=["sos", "pos", "eos
 ```
 
 A full walk-through is in the example notebook:
-[`phenopy/ExampleData.ipynb`](https://github.com/JavierLopatin/PhenoPY/blob/master/phenopy/ExampleData.ipynb),
+[`phenosensing/ExampleData.ipynb`](https://github.com/JavierLopatin/PhenoSensing/blob/master/phenosensing/ExampleData.ipynb),
 and an **executed tutorial exercising every function** is in
 [`examples/tutorial.ipynb`](examples/tutorial.ipynb).
 The example SIF data is a small sample over Chile, derived from

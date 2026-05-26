@@ -1,8 +1,8 @@
 # Quickstart
 
 ```python
-import phenopy
-from phenopy import load_sample
+import phenosensing
+from phenosensing import load_sample
 
 # Bundled example: SIF time series over Chile (2001-2020)
 da = load_sample("SIF")          # (time, y, x) with doy/year coords
@@ -35,7 +35,7 @@ ts = da.pheno.get_timeseries_metrics(window_length=3, metric=["sos", "pos", "eos
 ## Trends and anomalies
 
 ```python
-from phenopy import anomaly, n_seasons, trend, uncertainty
+from phenosensing import anomaly, n_seasons, trend, uncertainty
 
 # Interannual trend of start-of-season: Theil-Sen slope + Mann-Kendall p-value
 ts = da.pheno.get_timeseries_metrics(window_length=3, metric=["sos"])
@@ -57,7 +57,7 @@ For Southern-Hemisphere sites, reorder the day-of-year so the growing season is
 contiguous before computing the shape:
 
 ```python
-from phenopy import reorder_southern_hemisphere
+from phenosensing import reorder_southern_hemisphere
 
 positions, da_sh = reorder_southern_hemisphere(da)
 shape = da_sh.pheno.PhenoShape()

@@ -5,8 +5,8 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 
-from phenopy.io import load_sample  # noqa: E402
-from phenopy.plotting import PhenoPlot  # noqa: E402
+from phenosensing.io import load_sample  # noqa: E402
+from phenosensing.plotting import PhenoPlot  # noqa: E402
 
 
 def _xy(da):

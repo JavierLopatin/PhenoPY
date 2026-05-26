@@ -3,7 +3,7 @@
 import numpy as np
 import xarray as xr
 
-from phenopy.trends import trend
+from phenosensing.trends import trend
 
 
 def _series(values):

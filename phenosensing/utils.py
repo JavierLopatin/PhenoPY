@@ -70,7 +70,7 @@ def _getPheno(y, x, nGS, interpolType, recon_params=None, weights=None):
 
     x: DOY values
     y: ndarray with VI values
-    interpolType: reconstruction method name (see ``phenopy.reconstruction``)
+    interpolType: reconstruction method name (see ``phenosensing.reconstruction``)
     recon_params: optional dict of method-specific parameters
     weights: optional per-observation weights in [0, 1] (e.g. from a QA band),
         passed to reconstructors that support them (e.g. ``whittaker``).

@@ -7,8 +7,8 @@ Uses a synthetic clean season with injected *downward* "cloud" contamination
 import numpy as np
 import xarray as xr
 
-import phenopy  # noqa: F401  (registers the .pheno accessor)
-from phenopy.reconstruction import get_reconstructor, list_reconstructors
+import phenosensing  # noqa: F401  (registers the .pheno accessor)
+from phenosensing.reconstruction import get_reconstructor, list_reconstructors
 
 
 def _truth(doy):

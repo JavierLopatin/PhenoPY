@@ -3,8 +3,8 @@ reconstruction/extraction axes are threaded through it."""
 
 import numpy as np
 
-import phenopy  # noqa: F401  (registers the accessor)
-from phenopy.io import load_sample
+import phenosensing  # noqa: F401  (registers the accessor)
+from phenosensing.io import load_sample
 
 
 def test_get_timeseries_metrics_runs_and_threads_extraction():

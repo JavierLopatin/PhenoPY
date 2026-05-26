@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from phenopy.reconstruction import _beck, get_reconstructor, list_reconstructors
+from phenosensing.reconstruction import _beck, get_reconstructor, list_reconstructors
 
 
 def test_registry_lists_expected_methods():

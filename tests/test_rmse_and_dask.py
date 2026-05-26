@@ -5,8 +5,8 @@ import dask
 import numpy as np
 import pytest
 
-import phenopy  # noqa: F401  (registers the accessor)
-from phenopy.io import load_sample
+import phenosensing  # noqa: F401  (registers the accessor)
+from phenosensing.io import load_sample
 
 
 def test_rmse_overall_and_segmented():

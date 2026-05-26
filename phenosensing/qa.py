@@ -12,11 +12,11 @@ exotic, a custom callable:
 
 The decoder is deliberately **source-agnostic**: it operates on any xarray QA
 ``DataArray`` -- from Earth Engine, local rasters, NetCDF, ... -- so Earth Engine
-is never a dependency of PhenoPY. ``examples/`` shows a GEE -> xarray bridge that
+is never a dependency of PhenoSensing. ``examples/`` shows a GEE -> xarray bridge that
 feeds this function. Missing QA (``NaN``) is always treated as bad (weight 0).
 
 The resulting weights (in ``[0, 1]``) are what the weighted reconstruction
-consumes; PhenoPY's algorithms never need to know which sensor produced them.
+consumes; PhenoSensing's algorithms never need to know which sensor produced them.
 """
 
 from __future__ import annotations

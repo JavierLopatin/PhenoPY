@@ -2,7 +2,7 @@
 
 ## The `pheno` accessor
 
-::: phenopy.phenopy.Pheno
+::: phenosensing.phenosensing.Pheno
     options:
       members:
         - PhenoShape
@@ -12,30 +12,30 @@
 
 ## Analysis layers
 
-::: phenopy.trends.trend
+::: phenosensing.trends.trend
 
-::: phenopy.anomaly.anomaly
+::: phenosensing.anomaly.anomaly
 
-::: phenopy.uncertainty.uncertainty
+::: phenosensing.uncertainty.uncertainty
 
 ## Method registries
 
-::: phenopy.reconstruction.list_reconstructors
+::: phenosensing.reconstruction.list_reconstructors
 
-::: phenopy.extraction.list_extractors
+::: phenosensing.extraction.list_extractors
 
 ## Shape analysis
 
-::: phenopy.curvature.get_curvature
+::: phenosensing.curvature.get_curvature
 
-::: phenopy.season.n_seasons
+::: phenosensing.season.n_seasons
 
 ## I/O
 
-::: phenopy.io.load_sample
+::: phenosensing.io.load_sample
 
-::: phenopy.io.list_samples
+::: phenosensing.io.list_samples
 
 ## Utilities
 
-::: phenopy.utils.reorder_southern_hemisphere
+::: phenosensing.utils.reorder_southern_hemisphere

@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
-import phenopy  # noqa: F401  (importing registers the `pheno` accessor)
+import phenosensing  # noqa: F401  (importing registers the `pheno` accessor)
 
 LSP_BANDS = [
     "sos",
@@ -44,7 +44,7 @@ def _synthetic_cube(ny=3, nx=4, years=3):
 
 
 def test_package_has_version():
-    assert isinstance(phenopy.__version__, str)
+    assert isinstance(phenosensing.__version__, str)
 
 
 def test_accessor_is_registered():

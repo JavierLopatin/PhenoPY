@@ -1,10 +1,10 @@
-# Development environment for PhenoPY.
+# Development environment for PhenoSensing.
 # Create with:   conda env create -f environment-dev.yml   (or use mamba)
 # Then install the package in editable mode:   pip install -e ".[fit,plot,dask,test,docs]"
 #
 # The geospatial stack (GDAL/rasterio/rioxarray) is pinned to conda-forge,
 # where it resolves far more reliably than via pip wheels.
-name: phenopy
+name: phenosensing
 channels:
   - conda-forge
 dependencies:

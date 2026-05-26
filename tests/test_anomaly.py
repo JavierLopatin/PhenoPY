@@ -4,8 +4,8 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
-import phenopy  # noqa: F401  (registers the accessor)
-from phenopy.anomaly import anomaly
+import phenosensing  # noqa: F401  (registers the accessor)
+from phenosensing.anomaly import anomaly
 
 
 def _cube_with_low_year(ny=2, nx=2, anomalous_year=2019):

@@ -3,7 +3,7 @@
 import numpy as np
 import xarray as xr
 
-from phenopy.season import n_seasons
+from phenosensing.season import n_seasons
 
 
 def _shape(curve):

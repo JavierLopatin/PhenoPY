@@ -4,8 +4,8 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
-import phenopy  # noqa: F401  (registers the accessor)
-from phenopy import _numba
+import phenosensing  # noqa: F401  (registers the accessor)
+from phenosensing import _numba
 
 
 def _clean_cube(ny=4, nx=5, n=60):

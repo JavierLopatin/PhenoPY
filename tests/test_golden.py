@@ -11,8 +11,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-import phenopy  # noqa: F401  (importing registers the `pheno` accessor)
-from phenopy.io import load_sample
+import phenosensing  # noqa: F401  (importing registers the `pheno` accessor)
+from phenosensing.io import load_sample
 
 GOLDEN_DIR = Path(__file__).parent / "golden"
 PHENOSHAPE_PARAMS = dict(interpolType="linear", rollWindow=5, nGS=52)

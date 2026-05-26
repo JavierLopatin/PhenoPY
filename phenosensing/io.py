@@ -1,4 +1,4 @@
-"""I/O helpers for PhenoPY, including the small bundled example datasets."""
+"""I/O helpers for PhenoSensing, including the small bundled example datasets."""
 
 from importlib.resources import files
 
@@ -40,7 +40,7 @@ def load_sample(name: str = "SIF") -> xr.DataArray:
     except KeyError:
         raise ValueError(f"Unknown sample {name!r}; choose from {list_samples()}.") from None
 
-    data_dir = files("phenopy").joinpath("data")
+    data_dir = files("phenosensing").joinpath("data")
     dates = pd.to_datetime(pd.read_csv(str(data_dir.joinpath(csv_name)), header=None).iloc[:, 0])
 
     da = rioxarray.open_rasterio(str(data_dir.joinpath(tif_name)))

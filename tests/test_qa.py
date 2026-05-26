@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 import xarray as xr
 
-from phenopy.qa import list_qa_specs, qa_to_weight
+from phenosensing.qa import list_qa_specs, qa_to_weight
 
 
 def _da(vals):

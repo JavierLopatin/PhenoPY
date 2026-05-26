@@ -1,7 +1,7 @@
-site_name: PhenoPY
+site_name: PhenoSensing
 site_description: Land surface phenology metrics from satellite image time series
-repo_url: https://github.com/JavierLopatin/PhenoPY
-repo_name: JavierLopatin/PhenoPY
+repo_url: https://github.com/JavierLopatin/PhenoSensing
+repo_name: JavierLopatin/PhenoSensing
 
 theme:
   name: material

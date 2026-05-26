@@ -1,6 +1,6 @@
 ###############################################################################
 #
-# PhenoPy is a Python 3.X library to process phenology indices derived from
+# PhenoSensing is a Python 3.X library to process phenology indices derived from
 # EarthObservation data.
 #
 ###############################################################################
@@ -44,7 +44,7 @@ class Pheno:
         Maps the chosen reconstruction method along the time axis with
         ``xarray.apply_ufunc`` (Dask-parallelised when the input is chunked).
 
-        :param interpolType: reconstruction method (see ``phenopy.reconstruction``).
+        :param interpolType: reconstruction method (see ``phenosensing.reconstruction``).
         :param nan_replace: value to treat as NaN before reconstruction.
         :param rollWindow: moving-average window applied to the reconstructed curve.
         :param nGS: number of output points per cycle (default 52, ~weekly).
@@ -52,7 +52,7 @@ class Pheno:
         :param chunks: optional spatial chunking (e.g. ``{"x": 300, "y": 300}``) for
             out-of-core / parallel processing; the time axis is kept whole.
         :param weights: optional per-observation weights ``(time, y, x)`` in [0, 1],
-            e.g. from :func:`phenopy.qa.qa_to_weight`. Forwarded to reconstructors
+            e.g. from :func:`phenosensing.qa.qa_to_weight`. Forwarded to reconstructors
             that support them (notably ``"whittaker"``); ``None`` keeps the
             unweighted behaviour unchanged.
         :returns: an xarray.DataArray with a ``doy`` dimension of length ``nGS``.

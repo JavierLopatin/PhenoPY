@@ -2,10 +2,10 @@
 
 import numpy as np
 
-import phenopy  # noqa: F401  (registers the accessor)
-from phenopy.io import load_sample
-from phenopy.uncertainty import uncertainty
-from phenopy.utils import LSP_BANDS
+import phenosensing  # noqa: F401  (registers the accessor)
+from phenosensing.io import load_sample
+from phenosensing.uncertainty import uncertainty
+from phenosensing.utils import LSP_BANDS
 
 
 def test_uncertainty_structure_and_reproducible():

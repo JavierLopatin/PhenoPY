@@ -1,6 +1,6 @@
 # Performance & scaling
 
-PhenoPY keeps **one readable reference implementation** per axis (NumPy/SciPy,
+PhenoSensing keeps **one readable reference implementation** per axis (NumPy/SciPy,
 mapped per pixel with `xarray.apply_ufunc`) and scales it two ways — it never
 ships a second copy of an algorithm. The two knobs:
 
@@ -73,7 +73,7 @@ compile. A Numba kernel would therefore be a **second implementation** of the
 18-metric logic that must stay byte-for-byte identical to the reference one
 forever: a maintenance and drift hazard for a marginal, default-path-only gain.
 
-So PhenoPY keeps **one** implementation and scales it with Dask, and reserves
+So PhenoSensing keeps **one** implementation and scales it with Dask, and reserves
 Numba for the place it is a clean win: the hot, simple, SciPy-free linear
 reconstruction loop. (A pure-NumPy micro-optimisation of `_getLSPmetrics2` — one
 implementation, faster for every backend — is the preferred next step if
@@ -81,11 +81,11 @@ extraction proves to be a bottleneck.)
 
 ## Choosing chunk sizes
 
-`phenopy.utils.computeChunkSize` suggests a chunking that targets ~100 MB tiles
+`phenosensing.utils.computeChunkSize` suggests a chunking that targets ~100 MB tiles
 while keeping the time axis whole:
 
 ```python
-from phenopy.utils import computeChunkSize
+from phenosensing.utils import computeChunkSize
 
 chunks = computeChunkSize(da, sizeMB=100)
 shape = da.pheno.PhenoShape(chunks=chunks)

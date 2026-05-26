@@ -12,8 +12,8 @@ from pathlib import Path
 
 import numpy as np
 
-import phenopy  # noqa: F401  (registers the `pheno` accessor)
-from phenopy.io import load_sample
+import phenosensing  # noqa: F401  (registers the `pheno` accessor)
+from phenosensing.io import load_sample
 
 OUT = Path(__file__).parent
 PHENOSHAPE_PARAMS = dict(interpolType="linear", rollWindow=5, nGS=52)

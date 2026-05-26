@@ -2,7 +2,7 @@
 
 Computes, per pixel, the Theil-Sen slope and the Mann-Kendall significance of a
 metric time series (e.g. one of the arrays returned by
-:meth:`~phenopy.phenopy.Pheno.get_timeseries_metrics`). This is the layer that
+:meth:`~phenosensing.phenosensing.Pheno.get_timeseries_metrics`). This is the layer that
 turns the interannual moving-window series into a statement such as *"is the
 start of season getting earlier, and is it significant?"*.
 

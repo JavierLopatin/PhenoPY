@@ -33,7 +33,7 @@ jobs:
           ruff check .
           ruff format --check .
       - name: Test
-        run: pytest -q --cov=phenopy --cov-report=term-missing
+        run: pytest -q --cov=phenosensing --cov-report=term-missing
 
   build:
     name: build distribution

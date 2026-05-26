@@ -1,4 +1,4 @@
-"""Benchmarks for PhenoPY's two scaling paths.
+"""Benchmarks for PhenoSensing's two scaling paths.
 
 Run from the repo root in the dev env::
 
@@ -19,9 +19,9 @@ import dask
 import numpy as np
 import xarray as xr
 
-import phenopy  # noqa: F401  (registers the `pheno` accessor)
-from phenopy import _numba
-from phenopy.io import load_sample
+import phenosensing  # noqa: F401  (registers the `pheno` accessor)
+from phenosensing import _numba
+from phenosensing.io import load_sample
 
 
 def tile(da, reps):
