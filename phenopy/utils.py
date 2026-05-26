@@ -219,46 +219,6 @@ def _getLSPmetrics2(phen, xnew, nGS, bands, phentype=1, extraction=None, extract
         return metrics
 
 
-def _getPheno2D(
-    dstack, doy, interpolType, nan_replace, rollWindow, nGS, xnew=None, recon_params=None
-):
-    # dstack.doy
-    ans = np.apply_along_axis(
-        _getPheno0, 0, dstack, doy, interpolType, nan_replace, rollWindow, nGS, recon_params
-    )
-
-    # TODO: ¿_getPheno0 cambia el orden del arreglo? si es así, debo corregir - DONE?
-    # TODO: retornar día del año modificado, eliminar time/year, usar xnew (nuevo doy) - DONE!
-    # Esto se llama PhenoShape
-
-    if xnew is None:
-        xnew = range(1, nGS + 1)
-
-    return _assemble(ans, dstack, {"time": xnew}, True)
-
-
-def _parseLSP(dstack, xnew, nGS, bands, phentype, extraction=None, extract_params=None):
-    # num=len(bandNames) = 16
-    ans = np.apply_along_axis(
-        _getLSPmetrics2, 0, dstack, xnew, nGS, bands, phentype, extraction, extract_params
-    )
-
-    return _assemble(ans, dstack, {"doy": bands}, True)
-
-
-def _assemble(computed_data, original_stack, z_values, asDataArray=True):
-    coords_ = z_values
-    coords_["y"] = original_stack["y"]
-    coords_["x"] = original_stack["x"]
-
-    if asDataArray:
-        out = xr.DataArray(computed_data, coords=coords_, dims=original_stack.dims)
-    else:
-        pass
-
-    return out
-
-
 def _rmse(computed_stack, original_stack, normalized=False):
     # Compute RMSE
     N = len(computed_stack["doy"])

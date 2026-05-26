@@ -16,9 +16,8 @@ import xarray as xr  # manipulate 3D time-series rasters
 
 from .curvature import get_curvature
 
-# from PhenoPy
 # functions from sibling modules
-from .utils import _getPheno2D, _parseLSP, _rmse
+from .utils import _getLSPmetrics2, _getPheno0, _rmse
 
 
 @xr.register_dataarray_accessor("pheno")
@@ -52,54 +51,56 @@ class Pheno:
         rollWindow: int = 5,
         nGS: int = 52,
         recon_params: dict | None = None,
+        chunks: dict | None = None,
     ) -> xr.DataArray:
         """
-        Apply the _getPheno2D/_getPheno2 function to a xarray.DataArray object. It calculates all the necessary auxiliary objects in order to use Dask functionality (trough map_blocks).
+        Reconstruct a smoothed phenological shape per pixel.
 
-        :param doy: day of the year. If not present, it will attempt to extract the doy from the time dimension.
-        :param interpolType: interpolation type
-        :param nan_replace: what to do with NaNs
-        :param rollWindow: rolling window size
-        :param nGS: number of periods per year, usually 52 (number of weeks in a year)
+        Maps the chosen reconstruction method along the time axis with
+        ``xarray.apply_ufunc`` (Dask-parallelised when the input is chunked).
 
-        :returns: computed xarray.DataArray
+        :param interpolType: reconstruction method (see ``phenopy.reconstruction``).
+        :param nan_replace: value to treat as NaN before reconstruction.
+        :param rollWindow: moving-average window applied to the reconstructed curve.
+        :param nGS: number of output points per cycle (default 52, ~weekly).
+        :param recon_params: optional dict of method-specific parameters.
+        :param chunks: optional spatial chunking (e.g. ``{"x": 300, "y": 300}``) for
+            out-of-core / parallel processing; the time axis is kept whole.
+        :returns: an xarray.DataArray with a ``doy`` dimension of length ``nGS``.
         """
         stack = self._obj
         doy = stack.doy.values
-
-        # Get the indices that would sort the doy coordinate
-        # sorted_indices = np.argsort(stack.doy.values)
-        # Reorder the time dimension using the sorted indices
-        # stack = stack.isel(time=sorted_indices)
-        # replicating what happens in _getPheno xnew definition
         xnew = np.linspace(np.min(doy), np.max(doy), nGS, dtype=np.int32)
-        # TODO: change hemisfere, start doy at the desired day (1 north, 182 south) and keep record about the original doy -> dos (day of season)
 
-        # TODO: define a function to auto calculate next chunk (to ~100MB each chunk)
-        time_chunk = {"x": 300, "y": 300}  # 'time': len(stack.time)}
+        # drop the time-associated coords so the new 'doy' output dim can't
+        # clash with the input 'doy' coordinate
+        stack = stack.drop_vars(["doy", "year"], errors="ignore")
+        if chunks is not None:
+            stack = stack.chunk(chunks)
+        if stack.chunks is not None:
+            # apply_ufunc consumes the whole time axis per pixel
+            stack = stack.chunk({"time": -1})
 
-        coords_ = {"time": xnew, "y": stack.coords["y"], "x": stack.coords["x"]}
-        template_ = xr.DataArray(
-            np.zeros((nGS, len(stack.y), len(stack.x))), coords=coords_, dims=["time", "y", "x"]
-        ).chunk(time_chunk)
-
-        stack = stack.chunk(time_chunk)
-        kwargs_ = {
-            "doy": doy,
-            "interpolType": interpolType,
-            "nan_replace": nan_replace,
-            "rollWindow": rollWindow,
-            "nGS": nGS,
-            "xnew": xnew,
-            "recon_params": recon_params,
-        }
-
-        stackP = stack.map_blocks(_getPheno2D, kwargs=kwargs_, template=template_).rename(
-            {"time": "doy"}
+        stackP = xr.apply_ufunc(
+            _getPheno0,
+            stack,
+            input_core_dims=[["time"]],
+            output_core_dims=[["doy"]],
+            exclude_dims={"time"},
+            vectorize=True,
+            dask="parallelized",
+            dask_gufunc_kwargs={"output_sizes": {"doy": nGS}},
+            output_dtypes=[float],
+            kwargs={
+                "doy": doy,
+                "interpolType": interpolType,
+                "nan_replace": nan_replace,
+                "rollWindow": rollWindow,
+                "nGS": nGS,
+                "recon_params": recon_params,
+            },
         )
-        stackP.pheno.kwargs["computePheno"] = kwargs_
-
-        return stackP
+        return stackP.assign_coords(doy=xnew).transpose("doy", ...)
 
     def PhenoLSP(
         self,
@@ -125,39 +126,40 @@ class Pheno:
         - phenType: Type os estimation of SOS and EOS. 1 = median value between POS and start and end of season. 2 = using the knee inflexion method. default 1
 
         """
-        if "computePheno" not in self.kwargs:
-            raise ValueError("No Pheno computed. Run PhenoShape() first.")  # TODO: auto-compute?
-
-        n_ = len(self.LSP_bands)
         stack = self._obj
-        xnew = self.kwargs["computePheno"]["xnew"]
-        time_chunk = [i for i in stack.chunks]
-        time_chunk[0] = n_
+        if "doy" not in stack.dims:
+            raise ValueError(
+                "PhenoLSP expects a PhenoShape output (a 'doy' dimension). Run PhenoShape() first."
+            )
+
+        xnew = stack["doy"].values
         if nGS is None:
-            nGS = self.kwargs["computePheno"]["nGS"]
+            nGS = len(xnew)
+        n_ = len(self.LSP_bands)
 
-        kwargs_ = {
-            "xnew": xnew,
-            "nGS": nGS,
-            "bands": self.LSP_bands,
-            "phentype": phentype,
-            "extraction": extraction,
-            "extract_params": extract_params,
-        }
+        if stack.chunks is not None:
+            stack = stack.chunk({"doy": -1})
 
-        coords_ = {"doy": self.LSP_bands, "y": stack.coords["y"], "x": stack.coords["x"]}
-        template_ = xr.DataArray(
-            np.zeros((n_, len(stack.y), len(stack.x))), coords=coords_, dims=["doy", "y", "x"]
-        ).chunk(time_chunk)
-
-        stackP = stack.map_blocks(_parseLSP, kwargs=kwargs_, template=template_).rename(
-            {"doy": "LSP_bands"}
+        stackP = xr.apply_ufunc(
+            _getLSPmetrics2,
+            stack,
+            input_core_dims=[["doy"]],
+            output_core_dims=[["LSP_bands"]],
+            exclude_dims={"doy"},
+            vectorize=True,
+            dask="parallelized",
+            dask_gufunc_kwargs={"output_sizes": {"LSP_bands": n_}},
+            output_dtypes=[float],
+            kwargs={
+                "xnew": xnew,
+                "nGS": nGS,
+                "bands": self.LSP_bands,
+                "phentype": phentype,
+                "extraction": extraction,
+                "extract_params": extract_params,
+            },
         )
-        stackP.pheno.kwargs["computePhenoLSP"] = (
-            kwargs_  # this doesn't work, is not saved, pheno objet its lost in datadaset transformation
-        )
-
-        return stackP.to_dataset("LSP_bands")
+        return stackP.assign_coords(LSP_bands=self.LSP_bands).to_dataset("LSP_bands")
 
     def RMSE(
         self,
@@ -182,10 +184,10 @@ class Pheno:
         # shape = ans.copy(); original_stack=ndvi.copy(); LSP_stack = ans2.copy()
         computed_stack = self._obj  # inShape, phen  || # original_stack = inData = dstack
 
-        # 1. Check if I'm PhenoShape data
-        if "computePheno" not in self.kwargs:
+        # 1. Check this is PhenoShape output (it must carry a 'doy' dimension)
+        if "doy" not in computed_stack.dims:
             raise ValueError(
-                "It seems computePheno has not yet been computed. Run PhenoShape() first."
+                "RMSE expects a PhenoShape output (a 'doy' dimension). Run PhenoShape() first."
             )
 
         if nan_replace is not None:
