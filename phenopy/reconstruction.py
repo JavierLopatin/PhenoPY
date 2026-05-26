@@ -70,12 +70,53 @@ def _savgol(x, y, xnew, window_length=7, polyorder=2, **params):
     return savgol_filter(base, wl, po)
 
 
-def _whittaker(x, y, xnew, lmbd=10.0, order=2, **params):
+def _whittaker(x, y, xnew, lmbd=10.0, order=2, weights=None, **params):
     from whittaker_eilers import WhittakerSmoother
 
-    base = np.interp(xnew, x, y)
-    smoother = WhittakerSmoother(lmbda=lmbd, order=order, data_length=len(base))
-    return np.asarray(smoother.smooth(base), dtype=float)
+    if weights is None:
+        base = np.interp(xnew, x, y)
+        smoother = WhittakerSmoother(lmbda=lmbd, order=order, data_length=len(base))
+        return np.asarray(smoother.smooth(base), dtype=float)
+
+    # Weighted: use per-observation weights (e.g. from a QA band). Pooled
+    # multi-year input has duplicate DOYs, so collapse each unique DOY to its
+    # weighted mean (with total weight) before smoothing the irregular series,
+    # then resample to the regular grid.
+    x = np.asarray(x, dtype=float)
+    y = np.asarray(y, dtype=float)
+    w = np.clip(np.asarray(weights, dtype=float), 0.0, None)
+    ux, inv = np.unique(x, return_inverse=True)
+    sw = np.bincount(inv, weights=w, minlength=ux.size)
+    swy = np.bincount(inv, weights=w * np.nan_to_num(y), minlength=ux.size)
+    uy = np.where(sw > 0, swy / np.where(sw > 0, sw, 1.0), np.interp(ux, x, y))
+    smoother = WhittakerSmoother(
+        lmbda=lmbd,
+        order=order,
+        data_length=ux.size,
+        x_input=ux.tolist(),
+        weights=np.maximum(sw, 1e-6).tolist(),
+    )
+    smoothed = np.asarray(smoother.smooth(uy.tolist()), dtype=float)
+    return np.interp(xnew, ux, smoothed)
+
+
+def _upper_envelope(x, y, xnew, base="whittaker", n_iter=3, base_params=None, **params):
+    """Iterative upper-envelope reconstruction (Chen et al. 2004 / TIMESAT wTSM).
+
+    Fits a base smoother, then repeatedly lifts below-fit samples -- assumed
+    cloud-contaminated, since clouds bias optical VIs *downward* -- up to the
+    fitted curve and refits, so the result tracks the noise-free upper envelope.
+    Needs no QA band; ``base`` is any registered reconstructor and ``base_params``
+    its parameters (e.g. ``{"lmbd": 50}``).
+    """
+    recon = get_reconstructor(base)
+    bp = dict(base_params or {})
+    grid = np.interp(xnew, x, y)  # work on the regular grid (no duplicate DOYs)
+    envelope = grid.copy()
+    for _ in range(max(int(n_iter), 1)):
+        fit = recon(xnew, envelope, xnew, **bp)
+        envelope = np.maximum(grid, fit)  # keep where obs >= fit, else lift to the fit
+    return recon(xnew, envelope, xnew, **bp)
 
 
 # --------------------------------------------------------------------------- #
@@ -165,6 +206,7 @@ RECONSTRUCTORS = {
     "dlog_beck": _dlog_beck,
     "dlog_elmore": _dlog_elmore,
     "agauss": _agauss,
+    "upper_envelope": _upper_envelope,
 }
 
 

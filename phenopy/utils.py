@@ -62,7 +62,7 @@ def reorder_southern_hemisphere(img: xr.Dataset) -> tuple:
     return positions, da
 
 
-def _getPheno(y, x, nGS, interpolType, recon_params=None):
+def _getPheno(y, x, nGS, interpolType, recon_params=None, weights=None):
     """
     Reconstruct a regular phenological curve from an irregular (doy, value) series.
 
@@ -70,6 +70,8 @@ def _getPheno(y, x, nGS, interpolType, recon_params=None):
     y: ndarray with VI values
     interpolType: reconstruction method name (see ``phenopy.reconstruction``)
     recon_params: optional dict of method-specific parameters
+    weights: optional per-observation weights in [0, 1] (e.g. from a QA band),
+        passed to reconstructors that support them (e.g. ``whittaker``).
     """
     inds = np.isnan(y)  # check if array has NaN values
     if np.sum(inds) == len(y):  # check if all values are NaN
@@ -80,30 +82,42 @@ def _getPheno(y, x, nGS, interpolType, recon_params=None):
             y = _fillNaN(y)
             _replaceElements(x)  # replace doy values when they are the same
         reconstruct = get_reconstructor(interpolType)
-        ynew = reconstruct(x, y, xnew, **(recon_params or {}))
+        # only forward ``weights`` when given, so the unweighted call is unchanged
+        extra = {} if weights is None else {"weights": weights}
+        ynew = reconstruct(x, y, xnew, **extra, **(recon_params or {}))
         return ynew
     except Exception as e:
         print(f"An error occurred: {e}")
         return np.full(nGS, np.nan)
 
 
-def _getPheno0(y, doy, interpolType, nan_replace, rollWindow, nGS, recon_params=None):
+def _getPheno0(y, doy, interpolType, nan_replace, rollWindow, nGS, recon_params=None, weights=None):
     # replace nan_replace values by NaN
     if nan_replace is not None:
         y = np.where(y == nan_replace, np.nan, y)
 
-    # sort values by DOY
+    # sort values by DOY (and the weights alongside, when provided)
     idx = doy.argsort()
     y = y[idx]
+    w = weights[idx] if weights is not None else None
 
     # get phenological shape (reconstruction)
-    phen = _getPheno(y, doy[idx], nGS, interpolType, recon_params=recon_params)
+    phen = _getPheno(y, doy[idx], nGS, interpolType, recon_params=recon_params, weights=w)
 
     # rolling average using moving window
     if rollWindow is not None:
         phen = _moving_average(phen, rollWindow)
 
     return phen
+
+
+def _getPheno0_weighted(y, weights, doy, interpolType, nan_replace, rollWindow, nGS, recon_params=None):
+    """``_getPheno0`` with the weights as a second positional array, for the
+    two-input ``xr.apply_ufunc`` path used when ``PhenoShape(weights=...)``."""
+    return _getPheno0(
+        y, doy, interpolType, nan_replace, rollWindow, nGS,
+        recon_params=recon_params, weights=weights,
+    )
 
 
 def _getLSPmetrics2(phen, xnew, nGS, bands, phentype=1, extraction=None, extract_params=None):

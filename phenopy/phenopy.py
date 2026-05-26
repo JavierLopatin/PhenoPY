@@ -18,7 +18,7 @@ from . import _numba
 from .curvature import get_curvature
 
 # functions from sibling modules
-from .utils import LSP_BANDS, _getLSPmetrics2, _getPheno0, _rmse
+from .utils import LSP_BANDS, _getLSPmetrics2, _getPheno0, _getPheno0_weighted, _rmse
 
 
 @xr.register_dataarray_accessor("pheno")
@@ -36,6 +36,7 @@ class Pheno:
         nGS: int = 52,
         recon_params: dict | None = None,
         chunks: dict | None = None,
+        weights: xr.DataArray | None = None,
     ) -> xr.DataArray:
         """
         Reconstruct a smoothed phenological shape per pixel.
@@ -50,6 +51,10 @@ class Pheno:
         :param recon_params: optional dict of method-specific parameters.
         :param chunks: optional spatial chunking (e.g. ``{"x": 300, "y": 300}``) for
             out-of-core / parallel processing; the time axis is kept whole.
+        :param weights: optional per-observation weights ``(time, y, x)`` in [0, 1],
+            e.g. from :func:`phenopy.qa.qa_to_weight`. Forwarded to reconstructors
+            that support them (notably ``"whittaker"``); ``None`` keeps the
+            unweighted behaviour unchanged.
         :returns: an xarray.DataArray with a ``doy`` dimension of length ``nGS``.
         """
         stack = self._obj
@@ -64,6 +69,7 @@ class Pheno:
             and recon_params is None
             and nan_replace is None
             and chunks is None
+            and weights is None
             and stack.chunks is None
             and (rollWindow is None or (isinstance(rollWindow, int) and rollWindow % 2 == 1))
         ):
@@ -92,25 +98,40 @@ class Pheno:
             # apply_ufunc consumes the whole time axis per pixel
             stack = stack.chunk({"time": -1})
 
-        stackP = xr.apply_ufunc(
-            _getPheno0,
-            stack,
-            input_core_dims=[["time"]],
-            output_core_dims=[["doy"]],
-            exclude_dims={"time"},
-            vectorize=True,
-            dask="parallelized",
-            dask_gufunc_kwargs={"output_sizes": {"doy": nGS}},
-            output_dtypes=[float],
-            kwargs={
-                "doy": doy,
-                "interpolType": interpolType,
-                "nan_replace": nan_replace,
-                "rollWindow": rollWindow,
-                "nGS": nGS,
-                "recon_params": recon_params,
-            },
-        )
+        kwargs = {
+            "doy": doy,
+            "interpolType": interpolType,
+            "nan_replace": nan_replace,
+            "rollWindow": rollWindow,
+            "nGS": nGS,
+            "recon_params": recon_params,
+        }
+        gufunc_kwargs = {
+            "output_core_dims": [["doy"]],
+            "exclude_dims": {"time"},
+            "vectorize": True,
+            "dask": "parallelized",
+            "dask_gufunc_kwargs": {"output_sizes": {"doy": nGS}},
+            "output_dtypes": [float],
+        }
+
+        if weights is None:
+            stackP = xr.apply_ufunc(
+                _getPheno0, stack, input_core_dims=[["time"]], kwargs=kwargs, **gufunc_kwargs
+            )
+        else:
+            # weighted path: map QA weights along time as a second input array
+            w = weights.drop_vars(["doy", "year"], errors="ignore")
+            if stack.chunks is not None:
+                w = w.chunk({"time": -1})
+            stackP = xr.apply_ufunc(
+                _getPheno0_weighted,
+                stack,
+                w,
+                input_core_dims=[["time"], ["time"]],
+                kwargs=kwargs,
+                **gufunc_kwargs,
+            )
         return stackP.assign_coords(doy=xnew).transpose("doy", ...)
 
     def PhenoLSP(
