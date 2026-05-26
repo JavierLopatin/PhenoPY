@@ -51,6 +51,7 @@ class Pheno:
         nan_replace: float | None = None,
         rollWindow: int = 5,
         nGS: int = 52,
+        recon_params: dict | None = None,
     ) -> xr.DataArray:
         """
         Apply the _getPheno2D/_getPheno2 function to a xarray.DataArray object. It calculates all the necessary auxiliary objects in order to use Dask functionality (trough map_blocks).
@@ -90,6 +91,7 @@ class Pheno:
             "rollWindow": rollWindow,
             "nGS": nGS,
             "xnew": xnew,
+            "recon_params": recon_params,
         }
 
         stackP = stack.map_blocks(_getPheno2D, kwargs=kwargs_, template=template_).rename(
@@ -266,6 +268,9 @@ class Pheno:
         RMSEnormalized: bool = True,
         nan_replace: float | None = None,
         interpolate_nans: bool = False,
+        recon_params: dict | None = None,
+        extraction: str | None = None,
+        extract_params: dict | None = None,
     ) -> dict:
         """
         Calculate and return a specified phenological metric timeseries.
@@ -335,9 +340,15 @@ class Pheno:
             year_sample = sample.year.values
             mean_year = np.mean(year_sample).astype(int)
             phenoshape = sample.pheno.PhenoShape(
-                interpolType=interpolType, nan_replace=nan_replace, rollWindow=rollWindow, nGS=nGS
+                interpolType=interpolType,
+                nan_replace=nan_replace,
+                rollWindow=rollWindow,
+                nGS=nGS,
+                recon_params=recon_params,
             )
-            lsp = phenoshape.pheno.PhenoLSP(nGS=nGS)
+            lsp = phenoshape.pheno.PhenoLSP(
+                nGS=nGS, extraction=extraction, extract_params=extract_params
+            )
             lsp = lsp.assign_coords(year=mean_year)
             # rmse_val = phenoshape.pheno.RMSE(ds, LSP_stack=lsp, normalized=RMSEnormalized, nan_replace=nan_replace, interpolate_nans=interpolate_nans)
             # rmse_val = rmse_val.assign_coords(year=mean_year)
