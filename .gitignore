@@ -15,5 +15,8 @@ site/
 .coverage
 htmlcov/
 
+# Locally cached Earth Engine downloads (see examples/earthengine_*.ipynb)
+examples/data/
+
 # OS
 .DS_Store

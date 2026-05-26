@@ -47,6 +47,10 @@ plot = ["matplotlib", "folium", "pyproj"]
 fit = ["whittaker-eilers", "pymannkendall"]
 kde = ["KDEpy"]
 fast = ["numba"]
+# Google Earth Engine data access for the example notebooks (needs a GEE
+# account + a Google Cloud project; auth is interactive, so this is not part
+# of `all` and never runs in CI).
+gee = ["earthengine-api", "xee", "netCDF4"]
 test = ["pytest", "pytest-cov", "ruff"]
 docs = ["mkdocs-material", "mkdocstrings[python]", "ipykernel", "nbconvert"]
 all = ["phenopy[plot,fit,kde,fast]"]

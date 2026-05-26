@@ -62,12 +62,14 @@ def display_map(x, y, crs="EPSG:4326", margin=-0.5, zoom_bias=0):
 
     # heavy optional plotting deps imported lazily (the [plot] extra)
     import folium
-    from pyproj import Proj, transform
+    from pyproj import Transformer
 
-    # Convert each corner coordinates to lat-lon
+    # Convert each corner coordinate to lat-lon (modern pyproj>=2 API;
+    # always_xy keeps (lon/easting, lat/northing) order on input and output)
     all_x = (x[0], x[1], x[0], x[1])
     all_y = (y[0], y[0], y[1], y[1])
-    all_longitude, all_latitude = transform(Proj(crs), Proj("EPSG:4326"), all_x, all_y)
+    transformer = Transformer.from_crs(crs, "EPSG:4326", always_xy=True)
+    all_longitude, all_latitude = transformer.transform(all_x, all_y)
 
     # Calculate zoom level based on coordinates
     lat_zoom_level = (
