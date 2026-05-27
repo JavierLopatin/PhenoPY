@@ -2,21 +2,21 @@
 <!-- Created with Inkscape (http://www.inkscape.org/) -->
 
 <svg
-   xmlns:dc="http://purl.org/dc/elements/1.1/"
-   xmlns:cc="http://creativecommons.org/ns#"
-   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
-   xmlns:svg="http://www.w3.org/2000/svg"
-   xmlns="http://www.w3.org/2000/svg"
-   xmlns:xlink="http://www.w3.org/1999/xlink"
-   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
-   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
    width="142.52054mm"
    height="165.94669mm"
    viewBox="0 0 142.52054 165.94669"
    version="1.1"
    id="svg8"
-   inkscape:version="0.92.3 (2405546, 2018-03-11)"
-   sodipodi:docname="logo.svg">
+   inkscape:version="1.1.2 (0a00cf5339, 2022-02-04)"
+   sodipodi:docname="logo.svg"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns:xlink="http://www.w3.org/1999/xlink"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg"
+   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+   xmlns:cc="http://creativecommons.org/ns#"
+   xmlns:dc="http://purl.org/dc/elements/1.1/">
   <defs
      id="defs2"
      style="white-space:pre;stroke-linecap:butt;stroke-linejoin:round">
@@ -556,20 +556,21 @@
      inkscape:pageopacity="0.0"
      inkscape:pageshadow="2"
      inkscape:zoom="1.4"
-     inkscape:cx="220.92044"
-     inkscape:cy="357.96067"
+     inkscape:cx="261.07143"
+     inkscape:cy="357.85714"
      inkscape:document-units="mm"
-     inkscape:current-layer="g3353"
+     inkscape:current-layer="layer1"
      showgrid="false"
      fit-margin-top="0"
      fit-margin-left="0"
      fit-margin-right="0"
      fit-margin-bottom="0"
      inkscape:window-width="1920"
-     inkscape:window-height="1012"
+     inkscape:window-height="935"
      inkscape:window-x="0"
      inkscape:window-y="32"
-     inkscape:window-maximized="1" />
+     inkscape:window-maximized="1"
+     inkscape:pagecheckerboard="0" />
   <metadata
      id="metadata5">
     <rdf:RDF>
@@ -578,7 +579,6 @@
         <dc:format>image/svg+xml</dc:format>
         <dc:type
            rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
-        <dc:title />
       </cc:Work>
     </rdf:RDF>
   </metadata>
@@ -606,16 +606,16 @@
        sodipodi:nodetypes="cccccc" />
     <text
        xml:space="preserve"
-       style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:22.57777786px;line-height:1.25;font-family:AlArabiya;-inkscape-font-specification:AlArabiya;letter-spacing:0px;word-spacing:0px;white-space:pre;fill:#ffffff;fill-opacity:1;stroke:none;stroke-width:0.26458332;stroke-linecap:butt;stroke-linejoin:round"
-       x="41.43816"
-       y="151.1335"
+       style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:19.7556px;line-height:1.25;font-family:AlArabiya;-inkscape-font-specification:AlArabiya;letter-spacing:0px;word-spacing:0px;white-space:pre;fill:#ffffff;fill-opacity:1;stroke:none;stroke-width:0.264583;stroke-linecap:butt;stroke-linejoin:round"
+       x="19.742306"
+       y="149.01686"
        id="text4675"><tspan
          sodipodi:role="line"
          id="tspan4673"
-         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:22.57777786px;font-family:'AR PL UMing TW';-inkscape-font-specification:'AR PL UMing TW';white-space:pre;fill:#ffffff;stroke-width:0.26458332;stroke-linecap:butt;stroke-linejoin:round"
-         x="41.43816"
-         y="151.1335"
-         transform="translate(7.9375004)">PhenoPy</tspan></text>
+         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:19.7556px;font-family:'AR PL UMing TW';-inkscape-font-specification:'AR PL UMing TW';white-space:pre;fill:#ffffff;stroke-width:0.264583;stroke-linecap:butt;stroke-linejoin:round"
+         x="19.742306"
+         y="149.01686"
+         transform="translate(7.9375004)">PhenoSensing</tspan></text>
     <g
        id="figure_1"
        transform="matrix(0.36794055,0,0,0.36789409,76.466588,-29.446982)"
@@ -1622,14 +1622,14 @@
              ry="17.260977" />
           <text
              xml:space="preserve"
-             style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:15.99228764px;line-height:1.25;font-family:Arial;-inkscape-font-specification:Arial;letter-spacing:0px;word-spacing:0px;white-space:pre;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1.67817104;stroke-linecap:butt;stroke-linejoin:round"
+             style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:15.9923px;line-height:1.25;font-family:Arial;-inkscape-font-specification:Arial;letter-spacing:0px;word-spacing:0px;white-space:pre;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1.67817;stroke-linecap:butt;stroke-linejoin:round"
              x="129.38451"
              y="155.843"
              id="text1090"
              transform="scale(0.99955459,1.0004456)"><tspan
                sodipodi:role="line"
                id="tspan1088"
-               style="font-size:15.99228764px;white-space:pre;stroke-width:1.67817104;stroke-linecap:butt;stroke-linejoin:round;-inkscape-font-specification:'Arial Bold';font-family:Arial;font-weight:bold;font-style:normal;font-stretch:normal;font-variant:normal"
+               style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:15.9923px;font-family:Arial;-inkscape-font-specification:'Arial Bold';white-space:pre;stroke-width:1.67817;stroke-linecap:butt;stroke-linejoin:round"
                x="129.38451"
                y="155.843">SOS</tspan></text>
           <ellipse
@@ -1641,14 +1641,14 @@
              ry="17.260977" />
           <text
              xml:space="preserve"
-             style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:15.99228764px;line-height:1.25;font-family:Arial;-inkscape-font-specification:Arial;letter-spacing:0px;word-spacing:0px;white-space:pre;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1.67817104;stroke-linecap:butt;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none"
+             style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:15.9923px;line-height:1.25;font-family:Arial;-inkscape-font-specification:Arial;letter-spacing:0px;word-spacing:0px;white-space:pre;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1.67817;stroke-linecap:butt;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none"
              x="218.42152"
              y="21.990414"
              id="text1090-6"
              transform="scale(0.99955459,1.0004456)"><tspan
                sodipodi:role="line"
                id="tspan1088-7"
-               style="font-size:15.99228764px;white-space:pre;stroke-width:1.67817104;stroke-linecap:butt;stroke-linejoin:round;-inkscape-font-specification:'Arial Bold';font-family:Arial;font-weight:bold;font-style:normal;font-stretch:normal;font-variant:normal"
+               style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:15.9923px;font-family:Arial;-inkscape-font-specification:'Arial Bold';white-space:pre;stroke-width:1.67817;stroke-linecap:butt;stroke-linejoin:round"
                x="218.42152"
                y="21.990414">POS</tspan></text>
           <ellipse
@@ -1660,14 +1660,14 @@
              ry="17.260977" />
           <text
              xml:space="preserve"
-             style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:15.99228764px;line-height:1.25;font-family:Arial;-inkscape-font-specification:Arial;letter-spacing:0px;word-spacing:0px;white-space:pre;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1.67817104;stroke-linecap:butt;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none"
+             style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:15.9923px;line-height:1.25;font-family:Arial;-inkscape-font-specification:Arial;letter-spacing:0px;word-spacing:0px;white-space:pre;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1.67817;stroke-linecap:butt;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none"
              x="332.17621"
              y="158.11525"
              id="text1090-3"
              transform="scale(0.99955459,1.0004456)"><tspan
                sodipodi:role="line"
                id="tspan1088-5"
-               style="font-size:15.99228764px;white-space:pre;stroke-width:1.67817104;stroke-linecap:butt;stroke-linejoin:round;-inkscape-font-specification:'Arial Bold';font-family:Arial;font-weight:bold;font-style:normal;font-stretch:normal;font-variant:normal"
+               style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:15.9923px;font-family:Arial;-inkscape-font-specification:'Arial Bold';white-space:pre;stroke-width:1.67817;stroke-linecap:butt;stroke-linejoin:round"
                x="332.17621"
                y="158.11525">EOS</tspan></text>
           <ellipse
