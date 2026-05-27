@@ -66,7 +66,6 @@ packages = ["phenosensing"]
 # Ship only the small example rasters + date CSVs; keep big/decorative
 # assets and the notebook out of the wheel.
 exclude = [
-    "phenosensing/ExampleData.ipynb",
     "phenosensing/.ipynb_checkpoints",
     "phenosensing/__pycache__",
     "phenosensing/data/kndvi_186.tif",
@@ -78,7 +77,6 @@ exclude = [
 
 [tool.hatch.build.targets.sdist]
 exclude = [
-    "phenosensing/ExampleData.ipynb",
     "phenosensing/.ipynb_checkpoints",
     "phenosensing/data/kndvi_186.tif",
     "phenosensing/data/*.png",

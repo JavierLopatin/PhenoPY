@@ -18,5 +18,8 @@ htmlcov/
 # Locally cached Earth Engine downloads (see examples/earthengine_*.ipynb)
 examples/data/
 
+# User WIP notebook — superseded by examples/tutorial.ipynb; kept locally, not published
+phenosensing/ExampleData.ipynb
+
 # OS
 .DS_Store

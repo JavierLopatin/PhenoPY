@@ -19,9 +19,23 @@ land-surface-phenology (LSP) metrics** from it, with first-class support for
 **interannual** analysis and the **Southern Hemisphere**. It is `xarray`-native and
 Dask-aware, so the same code runs on a single pixel or a larger-than-memory raster.
 
-It fills a real gap: the most complete LSP toolkits (phenofit, npphen, greenbrown,
-TIMESAT) are R/MATLAB, and the closest Python option is unpackaged. PhenoSensing is a
-clean, installable, tested, MIT-licensed Python library.
+PhenoSensing is a clean, installable, tested, MIT-licensed Python library with a
+composable, `xarray`-native and Dask-aware workflow; its land-surface-phenology methods
+are reimplemented from the primary literature.
+
+What's distinctive about PhenoSensing:
+
+- a **composable 3-axis pipeline** — any reconstruction × extraction × temporal mode;
+- **interannual** moving-window metrics (`get_timeseries_metrics`);
+- **segmented-RMSE interannual stability** (`rmse_sos`/`rmse_pos`/`rmse_eos`, with an RGB
+  composite map), after Lopatin (2023);
+- source-agnostic **QA weighting** — decode any quality band into per-observation weights;
+- first-class **Southern-Hemisphere** support; and an `xarray` accessor with a **Numba**
+  fast path and **Dask** out-of-core for larger-than-memory rasters.
+
+Several widely used phenology toolkits (e.g. phenofit, npphen, greenbrown, TIMESAT) are
+written in R or MATLAB — see [Methods & references](docs/methods.md) for related projects,
+in Python and beyond.
 
 ## Composable 3-axis design
 

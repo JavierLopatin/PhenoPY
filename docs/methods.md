@@ -88,12 +88,13 @@ The **18 LSP metrics** returned by `PhenoLSP`:
 | [npphen](https://github.com/labGRS/npphen) | R | GPL | non-parametric phenology + anomaly mapping (Chávez et al., 2023) |
 | [greenbrown](https://greenbrown.r-forge.r-project.org/) | R | GPL | LSP + trend/breakpoint analysis (Forkel et al., 2013) |
 | TIMESAT | C/MATLAB | — | SG / asym.-Gaussian / double-logistic + wTSM (Jönsson & Eklundh, 2004) |
-| [Phenolopy](https://github.com/lewistrotter/Phenolopy) | Python | Apache-2.0 | xarray-based, unpackaged |
+| [Phenolopy](https://github.com/lewistrotter/Phenolopy) | Python | Apache-2.0 | xarray-based |
 | [pyPhenology](https://github.com/sdtaylor/pyPhenology) | Python | MIT | species-level phenology models (not LSP from imagery) |
 
-PhenoSensing's niche: a clean, installed, tested, **xarray-/Dask-native** Python LSP
-library — the most complete alternatives are R/MATLAB, and the closest Python one is
-unpackaged.
+PhenoSensing aims to provide a clean, installable, tested, **xarray-/Dask-native**
+Python implementation, with the methods above reimplemented from the primary
+literature. It complements the projects listed here rather than replacing them — pick
+whichever best fits your stack and language.
 
 ## References
 
