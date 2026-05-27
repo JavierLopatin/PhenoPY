@@ -30,6 +30,10 @@ What's distinctive about PhenoSensing:
 - **segmented-RMSE interannual stability** (`rmse_sos`/`rmse_pos`/`rmse_eos`, with an RGB
   composite map), after Lopatin (2023);
 - source-agnostic **QA weighting** — decode any quality band into per-observation weights;
+- **per-pixel seasonal-phase anchoring** (`hemisphere="auto"` / `season_phase`) — detects each
+  pixel's season and centers it before extraction, so year-boundary-wrapping seasons and scenes
+  that mix summer- and winter-peaking vegetation work without zonal splitting (the
+  Southern-Hemisphere reorder becomes the `"south"` special case);
 - first-class **Southern-Hemisphere** support; and an `xarray` accessor with a **Numba**
   fast path and **Dask** out-of-core for larger-than-memory rasters.
 
@@ -66,7 +70,8 @@ behind each method and its primary paper.
   **multi-season** counts, and **bootstrap uncertainty** per metric.
 - **QA weighting**: decode any quality band (MODIS / Landsat / Sentinel-2 or a custom
   spec) into per-observation weights for a QA-weighted reconstruction.
-- **Southern-Hemisphere** day-of-year reordering.
+- **Southern-Hemisphere** day-of-year reordering, plus **per-pixel phase anchoring**
+  (`hemisphere="auto"` / `season_phase`) for scenes that mix summer- and winter-peaking pixels.
 - **Dask-aware** with an optional **Numba** fast path.
 
 
@@ -113,12 +118,17 @@ ts = da.pheno.get_timeseries_metrics(window_length=3, metric=["sos", "pos", "eos
 Analysis layers:
 
 ```python
-from phenosensing import trend, anomaly, n_seasons, uncertainty, qa_to_weight
+from phenosensing import trend, anomaly, n_seasons, season_phase, uncertainty, qa_to_weight
 
 sos_trend = trend(ts["sos"])              # Theil-Sen slope + Mann-Kendall p
 an        = anomaly(da)                   # anomaly, z, RFD percentile (npphen-style)
 nos       = n_seasons(shape)              # growing seasons per pixel
 unc       = uncertainty(da, n_boot=50)    # bootstrap std of each metric
+phase     = season_phase(da)              # per-pixel peak/anchor DOY + aseasonal flag
+
+# Per-pixel phase anchoring: center each pixel's season before extracting metrics
+# (fixes year-boundary-wrapping seasons; handles summer- and winter-peaking pixels in one scene)
+lsp_auto  = shape.pheno.PhenoLSP(hemisphere="auto")
 
 # QA-weighted reconstruction (decode a quality band -> weights)
 w     = qa_to_weight(qa_band, "MOD13Q1")  # or LANDSAT_C2 / S2_SCL / custom spec

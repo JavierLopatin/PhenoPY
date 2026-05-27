@@ -36,6 +36,8 @@
 
 ::: phenosensing.season.n_seasons
 
+::: phenosensing.phase.season_phase
+
 ## I/O
 
 ::: phenosensing.io.load_sample

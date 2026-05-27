@@ -12,6 +12,7 @@ from .anomaly import anomaly  # noqa: F401
 from .curvature import classify_vector_numeric, get_curvature  # noqa: F401
 from .extraction import list_extractors  # noqa: F401
 from .io import list_samples, load_sample  # noqa: F401
+from .phase import season_phase  # noqa: F401
 from .qa import list_qa_specs, qa_to_weight  # noqa: F401
 from .reconstruction import list_reconstructors  # noqa: F401
 from .season import n_seasons  # noqa: F401
@@ -33,6 +34,7 @@ __all__ = [
     "trend",
     "anomaly",
     "n_seasons",
+    "season_phase",
     "uncertainty",
     "qa_to_weight",
     "list_qa_specs",

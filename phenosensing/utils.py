@@ -7,6 +7,7 @@ from scipy.integrate import trapezoid
 from scipy.stats import skew
 
 from .extraction import get_extractor
+from .phase import DEFAULT_STRENGTH_THRESH, _unrotate_doy, resolve_anchor
 from .reconstruction import get_reconstructor
 
 # Canonical order of the 18 land-surface-phenology bands from _getLSPmetrics2.
@@ -37,6 +38,13 @@ def reorder_southern_hemisphere(img: xr.Dataset) -> tuple:
     Reorder the DOY of the img for the Southern Hemisphere to ensure
     peak summer is in the middle. This reordering is critical for some applications
     like phenological studies.
+
+    This is the *global, manual* special case of phase anchoring: it shifts the
+    whole cube by ~half a year (the austral year). For heterogeneous or
+    cross-equator scenes — where some pixels peak in austral summer and others in
+    austral winter — prefer the *per-pixel* ``PhenoLSP(hemisphere="auto")`` /
+    :func:`phenosensing.phase.season_phase`, which anchors each pixel
+    individually. ``hemisphere="south"`` reproduces this global behaviour.
 
     :param img: xarray Dataset with `time` and `doy` dimensions/coordinates.
     :return: The input xarray Dataset reordered by DOY.
@@ -122,7 +130,18 @@ def _getPheno0_weighted(y, weights, doy, interpolType, nan_replace, rollWindow, 
     )
 
 
-def _getLSPmetrics2(phen, xnew, nGS, bands, phentype=1, extraction=None, extract_params=None):
+def _getLSPmetrics2(
+    phen,
+    xnew,
+    nGS,
+    bands,
+    phentype=1,
+    extraction=None,
+    extract_params=None,
+    hemisphere="north",
+    offset=None,
+    strength_thresh=DEFAULT_STRENGTH_THRESH,
+):
     """
     Obtain land surfurface phenology metrics
 
@@ -134,6 +153,16 @@ def _getLSPmetrics2(phen, xnew, nGS, bands, phentype=1, extraction=None, extract
         DOY values for PhenoShape data
     - bands: string list
         Name of the output bands (soft requirement)
+    - hemisphere: {"north", "south", "auto"}
+        Per-pixel seasonal-phase anchoring. ``"north"`` (default) does not rotate
+        and is byte-identical to the historical behaviour. ``"south"`` rotates by
+        a fixed half year (austral year, ~1 July). ``"auto"`` detects the pixel's
+        season from its first annual harmonic and rotates it into a centered
+        "phenological-year" frame, mapping the DOY-valued metrics back to calendar
+        DOY; aseasonal pixels (weak annual cycle) are left unrotated.
+        See :mod:`phenosensing.phase`.
+    - offset: float, optional
+        Explicit anchor DOY; overrides ``hemisphere`` (used internally / in tests).
 
     Outputs
     -------
@@ -161,106 +190,128 @@ def _getLSPmetrics2(phen, xnew, nGS, bands, phentype=1, extraction=None, extract
     inds = np.isnan(phen)  # check if array has NaN values
     if inds.any():  # check is all values are NaN
         return np.repeat(np.nan, len(bands))
-    else:
-        # basic variables
-        vpos = np.max(phen)
-        trough = np.min(phen)
-        ampl = vpos - trough
 
-        # get position of seasonal peak and trough
-        ipos = np.where(phen == vpos)[0]
-        pos = xnew[ipos]
+    # Per-pixel phase anchoring (axis: hemisphere). For the default "north" path
+    # nothing is rotated, so the metrics below are byte-identical to the historical
+    # code. Otherwise rotate the pixel into a centered "phenological-year" frame,
+    # run the metric body on the rotated curve, and map the DOY-valued metrics back
+    # to calendar DOY at the end. Aseasonal pixels resolve to ``None`` (no rotation).
+    anchor_doy = None
+    if not (hemisphere == "north" and offset is None):
+        anchor = resolve_anchor(phen, xnew, hemisphere, offset, strength_thresh)
+        if anchor is not None:
+            xnew_arr = np.asarray(xnew, dtype=float)
+            roll_k = int(np.argmin(np.abs(xnew_arr - anchor)))
+            anchor_doy = float(xnew_arr[roll_k])
+            phen = np.roll(phen, -roll_k)
 
-        # scale annual time series to 0-1
-        ratio = (phen - trough) / ampl
+    # basic variables
+    vpos = np.max(phen)
+    trough = np.min(phen)
+    ampl = vpos - trough
 
-        # separate greening from senesence values
-        dev = np.gradient(ratio)  # first derivative
-        greenup = np.zeros([ratio.shape[0]], dtype=bool)
-        greenup[dev > 0] = True
+    # get position of seasonal peak and trough
+    ipos = np.where(phen == vpos)[0]
+    pos = xnew[ipos]
 
-        # determine SOS / EOS via the selected extraction method (axis 3)
-        if extraction is None:
-            extraction = "seasonal_median"  # historical phentype 1/2 behavior
-        sos, eos, isos, ieos = get_extractor(extraction)(
-            phen, xnew, ratio, greenup, ipos, **(extract_params or {})
+    # scale annual time series to 0-1
+    ratio = (phen - trough) / ampl
+
+    # separate greening from senesence values
+    dev = np.gradient(ratio)  # first derivative
+    greenup = np.zeros([ratio.shape[0]], dtype=bool)
+    greenup[dev > 0] = True
+
+    # determine SOS / EOS via the selected extraction method (axis 3)
+    if extraction is None:
+        extraction = "seasonal_median"  # historical phentype 1/2 behavior
+    sos, eos, isos, ieos = get_extractor(extraction)(
+        phen, xnew, ratio, greenup, ipos, **(extract_params or {})
+    )
+    if sos is None:
+        isos = 0
+        sos = xnew[isos]
+    if eos is None:
+        ieos = len(xnew) - 1
+        eos = xnew[ieos]
+
+    # los: length of season
+    los = eos - sos
+    if los < 0:
+        los = np.nan
+
+    # get MSP, MAU (independent from SOS and EOS)
+
+    # mean spring
+    idx = np.mean(xnew[(xnew > sos) & (xnew < pos[0])])
+    idx = (np.abs(xnew - idx)).argmin()  # indexing value
+    msp = xnew[idx]  # DOY of MGS
+    vmsp = phen[idx]  # mgs value
+
+    # mean autum
+    idx = np.mean(xnew[(xnew < eos) & (xnew > pos[0])])
+    idx = (np.abs(xnew - idx)).argmin()  # indexing value
+    mau = xnew[idx]  # DOY of MGS
+    vmau = phen[idx]  # mgs value
+
+    # doy of growing season
+    green = xnew[(xnew > sos) & (xnew < eos)]
+    id_ = []
+    for i in range(len(green)):
+        id_.append((xnew == green[i]).nonzero()[0])
+    # TODO: move id_ generation to a list comprehension -> id_ = [(xnew == green[i]).nonzero()[0] for i in range(len(green))]
+
+    # index of growing season
+    id = np.array([item for sublist in id_ for item in sublist])
+
+    # get intergral of green season
+    ios = trapezoid(phen[id], xnew[id]) if len(id) > 0 else np.nan
+
+    # skewness of growing season
+    sw = skew(phen[id]) if len(id) > 0 else np.nan
+
+    # rate of greening [slope SOS-POS]
+    rog = (vpos - phen[isos]) / (pos - sos)
+
+    # rate of senescence [slope POS-EOS]
+    ros = (phen[ieos] - vpos) / (eos - pos)
+
+    # middle of season: midpoint DOY between SOS and EOS (NaN when LOS is)
+    mos = (sos + eos) / 2.0 if not np.isnan(los) else np.nan
+    # trough/base value already computed above as ``trough = np.min(phen)``
+
+    metrics = np.array(
+        (
+            sos,
+            pos[0],
+            eos,
+            phen[isos][0],
+            vpos,
+            phen[ieos][0],
+            los,
+            msp,
+            mau,
+            vmsp,
+            vmau,
+            ampl,
+            ios,
+            rog[0],
+            ros[0],
+            sw,
+            trough,
+            mos,
         )
-        if sos is None:
-            isos = 0
-            sos = xnew[isos]
-        if eos is None:
-            ieos = len(xnew) - 1
-            eos = xnew[ieos]
+    )
 
-        # los: length of season
-        los = eos - sos
-        if los < 0:
-            los = np.nan
+    # map the DOY-valued metrics from the rotated frame back to calendar DOY
+    # (values, durations and rates are frame-invariant, so they are left as is)
+    if anchor_doy is not None:
+        for _name in ("sos", "pos", "eos", "msp", "mau", "mos"):
+            _j = bands.index(_name)
+            if np.isfinite(metrics[_j]):
+                metrics[_j] = _unrotate_doy(metrics[_j], anchor_doy)
 
-        # get MSP, MAU (independent from SOS and EOS)
-
-        # mean spring
-        idx = np.mean(xnew[(xnew > sos) & (xnew < pos[0])])
-        idx = (np.abs(xnew - idx)).argmin()  # indexing value
-        msp = xnew[idx]  # DOY of MGS
-        vmsp = phen[idx]  # mgs value
-
-        # mean autum
-        idx = np.mean(xnew[(xnew < eos) & (xnew > pos[0])])
-        idx = (np.abs(xnew - idx)).argmin()  # indexing value
-        mau = xnew[idx]  # DOY of MGS
-        vmau = phen[idx]  # mgs value
-
-        # doy of growing season
-        green = xnew[(xnew > sos) & (xnew < eos)]
-        id_ = []
-        for i in range(len(green)):
-            id_.append((xnew == green[i]).nonzero()[0])
-        # TODO: move id_ generation to a list comprehension -> id_ = [(xnew == green[i]).nonzero()[0] for i in range(len(green))]
-
-        # index of growing season
-        id = np.array([item for sublist in id_ for item in sublist])
-
-        # get intergral of green season
-        ios = trapezoid(phen[id], xnew[id]) if len(id) > 0 else np.nan
-
-        # skewness of growing season
-        sw = skew(phen[id]) if len(id) > 0 else np.nan
-
-        # rate of greening [slope SOS-POS]
-        rog = (vpos - phen[isos]) / (pos - sos)
-
-        # rate of senescence [slope POS-EOS]
-        ros = (phen[ieos] - vpos) / (eos - pos)
-
-        # middle of season: midpoint DOY between SOS and EOS (NaN when LOS is)
-        mos = (sos + eos) / 2.0 if not np.isnan(los) else np.nan
-        # trough/base value already computed above as ``trough = np.min(phen)``
-
-        metrics = np.array(
-            (
-                sos,
-                pos[0],
-                eos,
-                phen[isos][0],
-                vpos,
-                phen[ieos][0],
-                los,
-                msp,
-                mau,
-                vmsp,
-                vmau,
-                ampl,
-                ios,
-                rog[0],
-                ros[0],
-                sw,
-                trough,
-                mos,
-            )
-        )
-
-        return metrics
+    return metrics
 
 
 def _rmse(computed_stack, original_stack, normalized=False):

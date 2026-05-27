@@ -27,6 +27,7 @@ def _bootstrap_lsp_std(
     extraction,
     extract_params,
     seed,
+    hemisphere,
 ):
     n_bands = len(LSP_BANDS)
     if np.isfinite(vi).sum() < 3:
@@ -39,7 +40,9 @@ def _bootstrap_lsp_std(
         d = doy[idx]
         phen = _getPheno0(vi[idx], d, interpolType, nan_replace, rollWindow, nGS)
         xnew = np.linspace(np.min(d), np.max(d), nGS, dtype=np.int32)
-        boot[b] = _getLSPmetrics2(phen, xnew, nGS, LSP_BANDS, phentype, extraction, extract_params)
+        boot[b] = _getLSPmetrics2(
+            phen, xnew, nGS, LSP_BANDS, phentype, extraction, extract_params, hemisphere=hemisphere
+        )
     return np.nanstd(boot, axis=0)
 
 
@@ -54,6 +57,7 @@ def uncertainty(
     extraction: str | None = None,
     extract_params: dict | None = None,
     seed: int = 0,
+    hemisphere: str = "north",
 ) -> xr.Dataset:
     """Per-pixel bootstrap uncertainty (std) of each land-surface-phenology metric.
 
@@ -64,8 +68,10 @@ def uncertainty(
     n_boot:
         Number of bootstrap replicates (resamples of the observations).
     interpolType, nan_replace, rollWindow, nGS, phentype, extraction,
-    extract_params:
-        Passed through to the reconstruction/extraction for each replicate.
+    extract_params, hemisphere:
+        Passed through to the reconstruction/extraction for each replicate
+        (``hemisphere="auto"`` anchors each pixel's phase before extraction; see
+        :func:`phenosensing.phase.season_phase`).
     seed:
         Seed for the per-pixel resampling (reproducible).
 
@@ -97,6 +103,7 @@ def uncertainty(
             "extraction": extraction,
             "extract_params": extract_params,
             "seed": seed,
+            "hemisphere": hemisphere,
         },
     )
     return out.assign_coords(LSP_bands=list(LSP_BANDS)).to_dataset("LSP_bands")

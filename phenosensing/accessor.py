@@ -16,6 +16,8 @@ import xarray as xr  # manipulate 3D time-series rasters
 
 from . import _numba
 from .curvature import get_curvature
+from .phase import season_phase
+from .season import n_seasons
 
 # functions from sibling modules
 from .utils import LSP_BANDS, _getLSPmetrics2, _getPheno0, _getPheno0_weighted, _rmse
@@ -140,6 +142,7 @@ class Pheno:
         phentype: int = 1,
         extraction: str | None = None,
         extract_params: dict | None = None,
+        hemisphere: str = "north",
     ) -> xr.Dataset:
         """
         Obtain land surface phenology metrics for a PhenoShape product
@@ -156,6 +159,11 @@ class Pheno:
             Number of observations to predict the PhenoShape
             default is 46; one per week
         - phenType: Type os estimation of SOS and EOS. 1 = median value between POS and start and end of season. 2 = using the knee inflexion method. default 1
+        - hemisphere: {"north", "south", "auto"}
+            Per-pixel seasonal-phase anchoring (default "north", no rotation).
+            "auto" detects each pixel's season and centers it before extraction,
+            adding ``phase_offset`` / ``aseasonal`` / ``multi_season`` coords.
+            See :mod:`phenosensing.phase`.
 
         """
         stack = self._obj
@@ -168,6 +176,11 @@ class Pheno:
         if nGS is None:
             nGS = len(xnew)
         n_ = len(self.LSP_bands)
+
+        if hemisphere not in ("north", "south", "auto"):
+            raise ValueError(
+                f"hemisphere must be 'north', 'south' or 'auto'; got {hemisphere!r}."
+            )
 
         if stack.chunks is not None:
             stack = stack.chunk({"doy": -1})
@@ -189,9 +202,25 @@ class Pheno:
                 "phentype": phentype,
                 "extraction": extraction,
                 "extract_params": extract_params,
+                "hemisphere": hemisphere,
             },
         )
-        return stackP.assign_coords(LSP_bands=self.LSP_bands).to_dataset("LSP_bands")
+        lsp = stackP.assign_coords(LSP_bands=self.LSP_bands).to_dataset("LSP_bands")
+
+        # When phase anchoring is active, surface the per-pixel anchor and flags so
+        # the user can map which pixels were rotated / treated as aseasonal.
+        if hemisphere != "north":
+            lsp.attrs["phase_anchoring"] = hemisphere
+            if hemisphere == "auto":
+                sp = season_phase(stack)
+                lsp = lsp.assign_coords(
+                    phase_offset=sp["anchor"],
+                    aseasonal=sp["aseasonal"].astype(bool),
+                    multi_season=(n_seasons(stack) > 1),
+                )
+            else:  # south: fixed austral anchor (~1 July)
+                lsp = lsp.assign_coords(phase_offset=xr.ones_like(lsp["sos"]) * 183.0)
+        return lsp
 
     def RMSE(
         self,
@@ -322,6 +351,7 @@ class Pheno:
         recon_params: dict | None = None,
         extraction: str | None = None,
         extract_params: dict | None = None,
+        hemisphere: str = "north",
     ) -> dict:
         """
         Calculate and return a specified phenological metric timeseries.
@@ -418,7 +448,7 @@ class Pheno:
                 recon_params=recon_params,
             )
             lsp = phenoshape.pheno.PhenoLSP(
-                nGS=nGS, extraction=extraction, extract_params=extract_params
+                nGS=nGS, extraction=extraction, extract_params=extract_params, hemisphere=hemisphere
             )
             lsp = lsp.assign_coords(year=mean_year)
             # rmse_val = phenoshape.pheno.RMSE(ds, LSP_stack=lsp, normalized=RMSEnormalized, nan_replace=nan_replace, interpolate_nans=interpolate_nans)

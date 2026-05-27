@@ -10,8 +10,9 @@ methods plug *into* an axis rather than replacing the pipeline.
 | **2. Extraction** | how SOS / POS / EOS and the other metrics are located on the curve | `PhenoLSP(extraction=…, extract_params=…)` |
 | **3. Temporal** | which years are pooled (climatology, per-year, or a moving multi-year window) | `get_timeseries_metrics(window_length=…)` |
 
-Trends, anomalies, multi-season counts, per-metric uncertainty and QA weighting are
-**layers on top** of these axes.
+Per-pixel seasonal-phase anchoring (`hemisphere="auto"`, see below) centers each pixel's
+season before extraction. Trends, anomalies, multi-season counts, per-metric uncertainty and
+QA weighting are **layers on top** of these axes.
 
 !!! note "Licensing"
     The GPL toolkits (phenofit, npphen, greenbrown, TIMESAT) were **not copied**; the
@@ -59,6 +60,57 @@ The **18 LSP metrics** returned by `PhenoLSP`:
 | Season | `los`, `ampl`, `ios` |
 | Spring / autumn | `msp`, `mau`, `vmsp`, `vmau` |
 | Rates / shape | `rog`, `ros`, `sw` |
+
+## Per-pixel phase anchoring (`hemisphere="auto"`)
+
+Every extractor above assumes a single growing-season bump that sits **centered** inside the
+DOY window [1, 365]. The real failure mode is not "hemisphere" but the **phase of each pixel's
+season relative to the 1-Jan cut**. When a season *wraps* the year boundary — austral-summer
+vegetation peaking in January (DOY ≈ 15) — the pooled climatology becomes a **U-shape**
+(dormancy trough mid-year, high values at both ends), and SOS/EOS/LOS and the seasonal integral
+come out wrong (a "season" that spans almost the whole year).
+
+The global `reorder_southern_hemisphere` shifts the *entire* cube by ~half a year. That cannot
+serve a heterogeneous scene: one Chilean image contains both austral-summer vegetation
+(peaks ≈ Jan) **and** winter-green shrubland/grassland that greens with the winter rains
+(peaks ≈ DOY 190). A single global flag fixes one regime and breaks the other:
+
+| Pixel regime (austral) | peak DOY | `hemisphere="north"` | `hemisphere="south"` | `hemisphere="auto"` |
+| ---------------------- | -------- | -------------------- | -------------------- | ------------------- |
+| Summer (Patagonia, Andes) | ≈ 15 | **broken** (season wraps) | ok | **ok** |
+| Winter-green (matorral, grass) | ≈ 190 | ok | **broken** | **ok** |
+| Spring | ≈ 250 | ok | ok | **ok** |
+
+For a real ~2-month season the "broken" cells return ~360-day / edge-pinned SOS/EOS, while
+`"auto"` recovers the true length in every regime.
+
+**How it works.** `season_phase` fits the **first annual Fourier harmonic** `a0 + a1·cos(2πd/365) + b1·sin(2πd/365)` per pixel (one small
+least-squares, vectorised over Dask). The harmonic peak gives the season's phase; the **anchor**
+(dormancy DOY) is half a year away, `peak + 182.5`. `PhenoLSP(hemisphere="auto")` rotates each
+pixel so its dormancy sits at the window edge — the season is centered — runs the *unchanged*
+reconstruction + extraction, then maps the DOY-valued metrics (`sos`, `pos`, `eos`, `msp`,
+`mau`, `mos`) back to calendar DOY. Curve values, durations and rates are rotation-invariant, so
+only those six are remapped; `los` is computed in the centered frame and is therefore
+circular-safe.
+
+`hemisphere="north"` (default) does **not** rotate and is byte-identical to the historical
+behaviour; `"south"` is the in-kernel equivalent of the global austral reorder. Two flags guard
+the edges:
+
+- **aseasonal** — pixels with a weak annual cycle (`strength < 0.15`, e.g. the Atacama) are left
+  unrotated and flagged, so a noisy phase estimate never drives a spurious rotation;
+- **multi_season** — pixels with more than one growing cycle (via `n_seasons`) are flagged; the
+  dominant annual harmonic still sets the anchor.
+
+`PhenoLSP(hemisphere="auto")` attaches `phase_offset`, `aseasonal` and `multi_season` as 2-D
+coordinates, so you can map which pixels were rotated. Mapping `season_phase(...).anchor` (or
+`peak_doy`) shows *when* each pixel's season occurs — a phenology product in its own right.
+
+!!! note "Why not bootstrap uncertainty as the check?"
+    A mis-centered extraction is usually *stably* wrong — it pins SOS/EOS to the window edge on
+    every bootstrap replicate — so its spread is small. Bootstrap `uncertainty` measures
+    precision, not accuracy; compare hemisphere modes with the **physical plausibility of LOS**
+    (the table above), not with uncertainty.
 
 ## Axis 3 — Temporal and analysis layers
 
