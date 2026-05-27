@@ -332,3 +332,60 @@ def plot_with_southern_doy(shape, coordinates, ylabel="NDVI", title=None):
     plt.ylabel(ylabel)
 
     return ax
+
+
+def plot_rmse_rgb(
+    rmse,
+    ax=None,
+    robust=True,
+    title="Segmented RMSE  —  R: Beginning   G: Middle   B: End",
+):
+    """Plot segmented RMSE as an RGB composite of the three phenophase maps.
+
+    Renders ``rmse_sos`` / ``rmse_pos`` / ``rmse_eos`` as the red / green / blue
+    channels, so each pixel's colour shows which part of the season drives its
+    interannual variability (after Lopatin, 2023):
+
+    - **R** = ``rmse_sos`` (Beginning)
+    - **G** = ``rmse_pos`` (Middle)
+    - **B** = ``rmse_eos`` (End)
+
+    Parameters
+    ----------
+    rmse : xarray.Dataset
+        Output of ``shape.pheno.RMSE(..., segment=True)`` — must contain
+        ``rmse_sos``, ``rmse_pos`` and ``rmse_eos`` (each with dims ``(y, x)``).
+    ax : matplotlib axis, optional
+        Axis to draw on; a new one is created if omitted.
+    robust : bool
+        Scale the channels to their 2nd-98th percentile (xarray ``robust``), so
+        outliers do not wash out the colours. Default True.
+    title : str
+        Axis title. Pass ``None`` or ``""`` to skip it.
+
+    Returns
+    -------
+    matplotlib.axes.Axes
+
+    References
+    ----------
+    Lopatin, J. (2023). Interannual Variability of Remotely Sensed Phenology
+    Relates to Plant Communities. IEEE Geoscience and Remote Sensing Letters,
+    20, 1-5.
+    """
+    needed = ["rmse_sos", "rmse_pos", "rmse_eos"]
+    missing = [v for v in needed if v not in rmse]
+    if missing:
+        raise ValueError(
+            f"plot_rmse_rgb needs a segmented RMSE Dataset; missing {missing}. "
+            "Call RMSE(..., segment=True) first."
+        )
+
+    rgb = rmse[needed].to_dataarray("phase")
+    if ax is None:
+        _, ax = plt.subplots()
+    ax.set_facecolor("black")  # masked / NaN pixels render black
+    rgb.plot.imshow(ax=ax, rgb="phase", robust=robust)
+    if title:
+        ax.set_title(title)
+    return ax

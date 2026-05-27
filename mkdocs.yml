@@ -34,6 +34,7 @@ nav:
   - Home: index.md
   - Installation: installation.md
   - Quickstart: quickstart.md
+  - Methods & references: methods.md
   - Performance: performance.md
   - API reference: api.md
 

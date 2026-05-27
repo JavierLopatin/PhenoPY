@@ -1,7 +1,7 @@
 """Per-metric uncertainty via bootstrap resampling.
 
 For each pixel, the observations are resampled with replacement ``n_boot``
-times; the 16 land-surface-phenology metrics are recomputed for every replicate
+times; the 18 land-surface-phenology metrics are recomputed for every replicate
 and their spread (standard deviation) is returned as the per-metric
 uncertainty. This is a non-parametric estimate of the sampling uncertainty of
 SOS/POS/EOS and the other metrics.
@@ -72,7 +72,7 @@ def uncertainty(
     Returns
     -------
     xarray.Dataset
-        The bootstrap standard deviation of each of the 16 metrics, dims
+        The bootstrap standard deviation of each of the 18 metrics, dims
         ``(y, x)`` per variable.
     """
     doy = np.asarray(da["doy"].values)

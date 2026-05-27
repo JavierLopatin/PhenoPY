@@ -29,5 +29,7 @@ pip install -e ".[fit,plot]"
 | `fit`  | whittaker-eilers, pymannkendall (smoothing, trends) |
 | `kde`  | KDEpy (non-parametric reconstruction)               |
 | `fast` | numba (accelerated kernels)                         |
+| `gee`  | earthengine-api, xee, netCDF4 (example notebook only) |
 | `test` | pytest, pytest-cov, ruff                            |
 | `docs` | mkdocs-material, mkdocstrings                        |
+| `all`  | plot + fit + kde + fast                             |

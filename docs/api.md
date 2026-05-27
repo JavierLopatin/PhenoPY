@@ -2,7 +2,7 @@
 
 ## The `pheno` accessor
 
-::: phenosensing.phenosensing.Pheno
+::: phenosensing.accessor.Pheno
     options:
       members:
         - PhenoShape
@@ -24,6 +24,12 @@
 
 ::: phenosensing.extraction.list_extractors
 
+## QA weighting
+
+::: phenosensing.qa.qa_to_weight
+
+::: phenosensing.qa.list_qa_specs
+
 ## Shape analysis
 
 ::: phenosensing.curvature.get_curvature
@@ -39,3 +45,7 @@
 ## Utilities
 
 ::: phenosensing.utils.reorder_southern_hemisphere
+
+## Plotting
+
+::: phenosensing.plotting.plot_rmse_rgb

@@ -203,15 +203,28 @@ class Pheno:
         segment: bool = False,
     ) -> xr.Dataset:
         """
-        Calculate the RMSE of the PhenoShape estimation; it can also do it by section, using the sos, pos and eos from the LSP computation (if provided).
+        Calculate the RMSE between the reconstructed ``PhenoShape`` and the original
+        observations, per pixel. When the shape is the multi-year climatology, this
+        RMSE is a measure of **interannual variability** (how much individual years
+        depart from the average seasonal curve). With ``segment=True`` the error is
+        split by phenophase into ``rmse_sos`` (Beginning, DOY >= SOS), ``rmse_pos``
+        (Middle, SOS < DOY < EOS) and ``rmse_eos`` (End, DOY <= EOS), which can be
+        composited as an RGB map (R/G/B = Beginning/Middle/End).
 
         :param original_stack: initial image stack, from which the phenoShape was calculated.
-        :param LSP_stack: LSP computed stack.
-        :param normalized: boolean, if True RMSE will be scaled to [0, 1].
+        :param LSP_stack: LSP computed stack (provides the sos/eos breakpoints for ``segment``).
+        :param normalized: boolean, if True RMSE will be scaled to the value range [0, 1].
         :param nan_replace: values to be converted to NaN.
         :param interpolate_nans: boolean, should NaNs values be interpolated?
-        :param metrics: string, either 'overall' or 'segmented'. If 'overall', the RMSE is calculated for the whole stack. If 'segmented', the RMSE is calculated for the sos, pos and eos segments.
-        :returns: computed xarray.DataArray with the RMSE
+        :param segment: boolean. If False only the overall ``rmse`` is returned; if True the
+            per-phenophase ``rmse_sos``/``rmse_pos``/``rmse_eos`` maps are added.
+        :returns: xarray.Dataset with ``rmse`` (plus the segmented maps when ``segment=True``).
+
+        References
+        ----------
+        Lopatin, J. (2023). Interannual Variability of Remotely Sensed Phenology
+        Relates to Plant Communities. IEEE Geoscience and Remote Sensing Letters,
+        20, 1-5.
         """
         # shape = ans.copy(); original_stack=ndvi.copy(); LSP_stack = ans2.copy()
         computed_stack = self._obj  # inShape, phen  || # original_stack = inData = dstack
@@ -321,8 +334,12 @@ class Pheno:
         - rollWindow (int):
             Rolling window size used in the PhenoShape calculation.
         - metric (str, list):
-            The specific metric to return. Choices are 'sos', 'pos', 'eos', 'los', 'msp', 'mau', 'vmsp',
-                        'vmau', 'aos', 'ios', 'rog', 'ros', 'rmse' [only overall rmse], 'curvature', or 'all'. Default is 'all'.
+            The specific metric(s) to return: any of the 18 LSP metrics ('sos', 'pos',
+            'eos', 'vsos', 'vpos', 'veos', 'los', 'msp', 'mau', 'vmsp', 'vmau', 'ampl',
+            'ios', 'rog', 'ros', 'sw', 'trough', 'mos'), 'curvature', 'rmse' (overall),
+            the segmented 'rmse_sos' / 'rmse_pos' / 'rmse_eos' (requesting any of these
+            computes RMSE(segment=True) per window), or 'all'. Default is 'all' ('all'
+            includes the overall 'rmse' but not the segmented maps).
         - nGS: Integer
             Number of observations to predict the PhenoShape
             default is 46; one per week
@@ -363,8 +380,22 @@ class Pheno:
 
         ds = self._obj
 
-        if "rmse" in metric or "all" in metric:
+        # Which RMSE outputs are requested. Segmented RMSE (rmse_sos/pos/eos) is only
+        # computed when explicitly asked for, so "all" stays cheap (overall rmse only).
+        if metric == "all":
+            requested = {"rmse"}
+        elif isinstance(metric, str):
+            requested = {metric}
+        else:
+            requested = set(metric)
+        _seg_keys = {"rmse_sos", "rmse_pos", "rmse_eos"}
+        want_segment = bool(_seg_keys & requested)
+        want_rmse = ("rmse" in requested) or want_segment
+        if want_rmse:
             metrics_dict["rmse"] = []
+        if want_segment:
+            for _k in ("rmse_sos", "rmse_pos", "rmse_eos"):
+                metrics_dict[_k] = []
 
         # get a list of years from the dataset
         if window_length <= 0:
@@ -392,8 +423,8 @@ class Pheno:
             lsp = lsp.assign_coords(year=mean_year)
             # rmse_val = phenoshape.pheno.RMSE(ds, LSP_stack=lsp, normalized=RMSEnormalized, nan_replace=nan_replace, interpolate_nans=interpolate_nans)
             # rmse_val = rmse_val.assign_coords(year=mean_year)
-            # Only estimate rmse if it's provided in the metric list
-            if "rmse" in metric or "all" in metric:
+            # Only estimate RMSE if requested (overall and/or segmented)
+            if want_rmse:
                 try:
                     rmse_val = phenoshape.pheno.RMSE(
                         ds,
@@ -401,12 +432,16 @@ class Pheno:
                         normalized=RMSEnormalized,
                         nan_replace=nan_replace,
                         interpolate_nans=interpolate_nans,
+                        segment=want_segment,
                     )
                     rmse_val = rmse_val.assign_coords(year=mean_year)
                     metrics_dict["rmse"].append(rmse_val.rmse)
+                    if want_segment:
+                        metrics_dict["rmse_sos"].append(rmse_val.rmse_sos)
+                        metrics_dict["rmse_pos"].append(rmse_val.rmse_pos)
+                        metrics_dict["rmse_eos"].append(rmse_val.rmse_eos)
                 except Exception as e:
                     warnings.warn(f"Failed to compute RMSE for year {mean_year}: {e}")
-                    rmse_val = None  # placeholder
             curvature_val = get_curvature(phenoshape)
             curvature_val = curvature_val.assign_coords(year=mean_year)
 
