@@ -1,6 +1,6 @@
 <p align="center">
   <a href="https://github.com/JavierLopatin/PhenoSensing">
-    <img src="phenosensing/data/logo.svg" height="240" alt="PhenoSensing logo">
+    <img src="phenosensing/data/logo.png" height="240" alt="PhenoSensing logo">
   </a>
 </p>
 
