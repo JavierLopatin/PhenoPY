@@ -1,7 +1,10 @@
-<h1 align="center">
-<a href='https://github.com/JavierLopatin/PhenoSensing'><img src='phenosensing/data/logo.svg' align="right" height="300" /></a>
-PhenoSensing
-</h1>
+<p align="center">
+  <a href="https://github.com/JavierLopatin/PhenoSensing">
+    <img src="phenosensing/data/logo.svg" height="240" alt="PhenoSensing logo">
+  </a>
+</p>
+
+<h1 align="center">PhenoSensing</h1>
 
 <h4 align="center">Land surface phenology from satellite image time series, built on xarray and Dask</h4>
 
