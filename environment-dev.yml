@@ -1,0 +1,45 @@
+# Development environment for PhenoSensing.
+# Create with:   conda env create -f environment-dev.yml   (or use mamba)
+# Then install the package in editable mode:   pip install -e ".[fit,plot,dask,test,docs]"
+#
+# The geospatial stack (GDAL/rasterio/rioxarray) is pinned to conda-forge,
+# where it resolves far more reliably than via pip wheels.
+name: phenosensing
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  # core scientific stack
+  - numpy
+  - scipy
+  - pandas
+  # geospatial / array
+  - xarray
+  - rioxarray
+  - rasterio
+  - rasterstats
+  - shapely
+  - dask
+  # performance
+  - numba
+  # plotting (optional extra)
+  - matplotlib
+  - folium
+  - pyproj
+  - tqdm
+  # dev / test / docs tooling
+  - pytest
+  - pytest-cov
+  - ruff
+  - python-build
+  - twine
+  - mkdocs-material
+  - ipykernel
+  - nbconvert
+  - pip
+  # pip-only packages (not reliably on conda-forge)
+  - pip:
+      - whittaker-eilers   # Whittaker smoother (Wave 1)
+      - pymannkendall      # trend tests (Wave 1)
+      - KDEpy              # non-parametric KDE reconstruction (optional)
+      - mkdocstrings[python]

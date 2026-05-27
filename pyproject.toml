@@ -1,0 +1,103 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+# Renamed from the original 'phenopy', which is taken on PyPI by an unrelated
+# clinical-phenotyping tool. 'phenosensing' (Phenology + remote Sensing) is both
+# the distribution and the import name.
+name = "phenosensing"
+dynamic = ["version"]
+description = "Land surface phenology metrics from satellite image time series, built on xarray."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE.txt" }
+authors = [{ name = "Javier Lopatin", email = "javierlopatin@gmail.com" }]
+keywords = [
+    "phenology",
+    "remote-sensing",
+    "vegetation",
+    "xarray",
+    "time-series",
+    "land-surface-phenology",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: GIS",
+]
+dependencies = [
+    "numpy",
+    "scipy>=1.6",
+    "pandas",
+    "xarray>=2023.1",
+    "rioxarray",
+    "rasterio",
+    "rasterstats",
+    "shapely",
+    "tqdm",
+    "dask[array]",
+]
+
+[project.optional-dependencies]
+plot = ["matplotlib", "folium", "pyproj"]
+fit = ["whittaker-eilers", "pymannkendall"]
+kde = ["KDEpy"]
+fast = ["numba"]
+# Google Earth Engine data access for the example notebooks (needs a GEE
+# account + a Google Cloud project; auth is interactive, so this is not part
+# of `all` and never runs in CI).
+gee = ["earthengine-api", "xee", "netCDF4"]
+test = ["pytest", "pytest-cov", "ruff"]
+docs = ["mkdocs-material", "mkdocstrings[python]", "ipykernel", "nbconvert"]
+all = ["phenosensing[plot,fit,kde,fast]"]
+
+[project.urls]
+Homepage = "https://github.com/JavierLopatin/PhenoSensing"
+Repository = "https://github.com/JavierLopatin/PhenoSensing"
+
+[tool.hatch.version]
+path = "phenosensing/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["phenosensing"]
+# Ship only the small example rasters + date CSVs; keep big/decorative
+# assets and the notebook out of the wheel.
+exclude = [
+    "phenosensing/ExampleData.ipynb",
+    "phenosensing/.ipynb_checkpoints",
+    "phenosensing/__pycache__",
+    "phenosensing/data/kndvi_186.tif",
+    "phenosensing/data/dates.txt",
+    "phenosensing/data/*.png",
+    "phenosensing/data/*.jpg",
+    "phenosensing/data/*.svg",
+]
+
+[tool.hatch.build.targets.sdist]
+exclude = [
+    "phenosensing/ExampleData.ipynb",
+    "phenosensing/.ipynb_checkpoints",
+    "phenosensing/data/kndvi_186.tif",
+    "phenosensing/data/*.png",
+    "phenosensing/data/*.jpg",
+    "phenosensing/data/*.svg",
+    ".github",
+    "docs",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+# Don't touch the example notebook (user-maintained) or data files.
+extend-exclude = ["*.ipynb", "phenosensing/data"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+# Many scientific expressions are intentionally long; don't fail on length.
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
