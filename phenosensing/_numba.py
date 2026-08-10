@@ -32,20 +32,26 @@ except ImportError:  # pragma: no cover - exercised only without the [fast] extr
 
 @njit(cache=True)
 def _mov_avg(a, n):
-    """Moving average matching utils._moving_average for odd ``n``."""
+    """Circular moving average, matching ``utils._moving_average`` with ``mode="wrap"``.
+
+    The two implementations have to agree element by element: `PhenoShape` picks one or the
+    other depending on whether numba is installed, and a silent divergence between them
+    would make results depend on the environment. `tests/test_numba.py` pins the agreement.
+    """
     m = a.shape[0]
     half = n // 2
-    valid_len = m - n + 1
     out = np.empty(m, dtype=np.float64)
-    for k in range(half):
-        out[k] = a[k]
-    for k in range(valid_len):
+    if n <= 1:
+        for k in range(m):
+            out[k] = a[k]
+        return out
+    for k in range(m):
         s = 0.0
         for w in range(n):
-            s += a[k + w]
-        out[half + k] = s / n
-    for k in range(half):
-        out[half + valid_len + k] = a[m - half + k]
+            # the window wraps: index m-1 is adjacent to index 0, which is what makes the
+            # first and last steps of a phenological year share the same neighbourhood
+            s += a[(k - half + w) % m]
+        out[k] = s / n
     return out
 
 

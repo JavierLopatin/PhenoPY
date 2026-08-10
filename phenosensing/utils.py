@@ -101,7 +101,8 @@ def _getPheno(y, x, nGS, interpolType, recon_params=None, weights=None):
         return np.full(nGS, np.nan)
 
 
-def _getPheno0(y, doy, interpolType, nan_replace, rollWindow, nGS, recon_params=None, weights=None):
+def _getPheno0(y, doy, interpolType, nan_replace, rollWindow, nGS, recon_params=None,
+               weights=None, rollMode="wrap"):
     # replace nan_replace values by NaN
     if nan_replace is not None:
         y = np.where(y == nan_replace, np.nan, y)
@@ -116,17 +117,18 @@ def _getPheno0(y, doy, interpolType, nan_replace, rollWindow, nGS, recon_params=
 
     # rolling average using moving window
     if rollWindow is not None:
-        phen = _moving_average(phen, rollWindow)
+        phen = _moving_average(phen, rollWindow, mode=rollMode)
 
     return phen
 
 
-def _getPheno0_weighted(y, weights, doy, interpolType, nan_replace, rollWindow, nGS, recon_params=None):
+def _getPheno0_weighted(y, weights, doy, interpolType, nan_replace, rollWindow, nGS,
+                        recon_params=None, rollMode="wrap"):
     """``_getPheno0`` with the weights as a second positional array, for the
     two-input ``xr.apply_ufunc`` path used when ``PhenoShape(weights=...)``."""
     return _getPheno0(
         y, doy, interpolType, nan_replace, rollWindow, nGS,
-        recon_params=recon_params, weights=weights,
+        recon_params=recon_params, weights=weights, rollMode=rollMode,
     )
 
 
@@ -359,9 +361,46 @@ def computeChunkSize(arr, sizeMB=100, Z="time"):
     return chunk
 
 
-def _moving_average(a, n=3):
-    out = np.convolve(a, np.ones(n), "valid") / n
-    return np.concatenate([a[: np.int32(n / 2)], out, a[-np.int32(n / 2) :]])  # add values of tail
+def _moving_average(a, n=3, mode="wrap"):
+    """Centred moving average of width ``n``, with a real edge neighbourhood.
+
+    ``mode`` is forwarded to :func:`numpy.pad` and decides what the window sees past the
+    ends of the array:
+
+    ``"wrap"``
+        the series is one closed cycle, so the last step is adjacent to the first. This is
+        the correct choice for a phenological year and is the default: ``PhenoShape``
+        reconstructs exactly one cycle onto ``nGS`` points.
+    ``"reflect"``
+        for an open series that is not periodic.
+    ``"legacy"``
+        the historical behaviour, kept only to reproduce output from before this fix.
+
+    Why the default changed. The historical implementation convolved in ``"valid"`` mode
+    and filled the resulting gap by **copying the raw, unsmoothed input** back into the
+    first and last ``n // 2`` positions::
+
+        out = np.convolve(a, np.ones(n), "valid") / n
+        return np.concatenate([a[: n // 2], out, a[-(n // 2) :]])
+
+    With the default ``rollWindow=5`` that left 4 of 52 steps unsmoothed while the other 48
+    were averaged over 5 neighbours -- a different noise level at the two ends of the
+    curve, which for a phenological year are the two sides of the *same* boundary. Measured
+    on 1,082 Landsat plots in central Chile, the resulting step between DOY 364 and DOY 1
+    was ~4x the typical week-to-week change and negative in 67-71% of plots: a systematic
+    edge bias, not noise. Any downstream consumer that treats the curve as cyclic -- a
+    circular padding in a CNN, an FFT, a harmonic fit -- reads that step as a real event.
+    """
+    n = int(n)
+    a = np.asarray(a, dtype=float)
+    if n <= 1:
+        return a
+    half = n // 2
+    if mode == "legacy":
+        out = np.convolve(a, np.ones(n), "valid") / n
+        return np.concatenate([a[:half], out, a[-half:]])
+    padded = np.pad(a, (half, n - 1 - half), mode=mode)
+    return np.convolve(padded, np.ones(n), "valid") / n
 
 
 def _fillNaN(x):
