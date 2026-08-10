@@ -1,15 +1,25 @@
-"""A phenological year has to close.
+"""The ends of a phenological curve: reproducible, evenly smoothed, and free to differ.
 
-Every test here guards the same property from a different side: the curve `PhenoShape`
-returns describes one cycle, so its last step is adjacent to its first. Nothing in the
-library used to enforce that, and the two ends drifted apart in a way that looked like a
-real vegetation event to any consumer treating the series as cyclic -- a circular padding,
-an FFT, a phase estimate.
+An earlier version of this file asserted that the curve must *close* -- that ``f(1)`` should
+equal ``f(365)``. That was wrong, and the correction is the point of these tests. When
+`PhenoShape` fits a composite over several years, the end of the composite joins the start
+of the *next* year, not its own. If productivity changed between years the two ends
+genuinely differ, and that difference is signal.
 
-The bias these tests pin was measured on 1,082 Landsat plots in central Chile: with
-``interpolType="linear"`` and the historical edge handling, the step between DOY 364 and
-DOY 1 was ~4x the typical week-to-week change, and negative in 67-71% of plots. Two
-independent causes, one test group each.
+What was actually broken was three separate things, measured on 1,082 Landsat plots in
+central Chile:
+
+1. **Order dependence.** `_getPheno0` sorted by DOY with an unstable quicksort, so
+   observations sharing a DOY were ordered arbitrarily -- and `_fillNaN` interpolates over
+   array positions, so a different tie order produced a different curve. All 690 plots with
+   no tied DOY reproduced bit for bit across machines; 375 of the 392 that do have ties did
+   not, median discrepancy 0.068. Ties affect 36% of plots.
+2. **Uneven smoothing.** `_moving_average` left the first and last ``n // 2`` steps raw
+   while the rest were averaged over ``n`` neighbours -- 4 of 52 steps with a different
+   noise level, at the two sides of the year boundary.
+3. **A bad remedy.** Closing the year (with ``mode="wrap"`` or the ``harmonic``
+   reconstructor) does remove the artefact, and also removes the real interannual signal.
+   The tests below pin that the signal survives.
 """
 
 import numpy as np
@@ -39,11 +49,12 @@ def test_moving_average_smooths_the_ends_too():
     assert not np.allclose(out[-2:], a[-2:]), "last two steps came through unsmoothed"
 
 
-def test_moving_average_wraps_the_window():
-    """With mode='wrap' the window at index 0 reaches back into the tail."""
+def test_moving_average_wraps_the_window_when_asked():
+    """`wrap` is still available for a genuine single cycle: the window at index 0 then
+    reaches back into the tail. It is no longer the default -- see the module docstring."""
     a = np.zeros(10)
     a[-1] = 10.0                       # a single spike at the very end
-    out = _moving_average(a, 3)
+    out = _moving_average(a, 3, mode="wrap")
     # a centred width-3 window at index 0 covers indices [-1, 0, 1] -> it must see the spike
     assert out[0] == pytest.approx(10.0 / 3)
 
@@ -53,7 +64,24 @@ def test_moving_average_preserves_the_mean_under_wrap():
     copied endpoints are counted with a different weight."""
     rng = np.random.default_rng(1)
     a = rng.normal(size=52) + 5.0
-    assert _moving_average(a, 5).mean() == pytest.approx(a.mean())
+    assert _moving_average(a, 5, mode="wrap").mean() == pytest.approx(a.mean())
+
+
+def test_shrink_touches_only_the_ends():
+    """The property that makes this a surgical fix rather than a new curve.
+
+    Wherever the full window fits -- steps ``half`` to ``n - half - 1`` -- `shrink` is the
+    same "valid" convolution the library always did. Only the ends change.
+    """
+    rng = np.random.default_rng(7)
+    for n in (3, 5, 7):
+        half = n // 2
+        a = rng.normal(size=52)
+        legacy = _moving_average(a, n, mode="legacy")
+        shrink = _moving_average(a, n, mode="shrink")
+        np.testing.assert_allclose(legacy[half:-half], shrink[half:-half], atol=1e-12)
+        differ = np.flatnonzero(np.abs(legacy - shrink) > 1e-12)
+        assert set(differ) <= set(list(range(half)) + list(range(52 - half, 52)))
 
 
 def test_legacy_mode_still_reproduces_the_old_output():
@@ -153,46 +181,93 @@ def _cube(ny=3, nx=3, n=70, seed=0):
     return da.assign_coords(doy=("time", doy), year=("time", times.year.values))
 
 
-@pytest.mark.parametrize("recon", ["linear", "harmonic"])
-def test_phenoshape_curve_closes_the_year(recon):
-    """The regression guard the library was missing.
+def test_phenoshape_is_invariant_to_the_order_of_the_observations():
+    """The reproducibility guard the library was missing.
 
-    For every reconstructed pixel, the wrap-around step may not exceed the typical step
-    inside the curve. This is the check that would have caught the original bug.
+    Feeding the same observations in a different order must give the same curve. It did not:
+    with tied DOYs the unstable sort picked an arbitrary order and `_fillNaN`, which
+    interpolates over array positions, filled the gaps differently.
     """
-    out = _cube().pheno.PhenoShape(interpolType=recon, rollWindow=5, nGS=52).values
-    flat = out.reshape(out.shape[0], -1).T
-    wrap = np.abs(flat[:, 0] - flat[:, -1])
-    typical = np.median(np.abs(np.diff(flat, axis=1)), axis=1)
-    assert np.all(wrap <= 3.0 * typical), (
-        f"{int((wrap > 3.0 * typical).sum())} of {len(wrap)} pixels have a wrap-around step "
-        f"more than 3x the typical step (max ratio {np.max(wrap / typical):.1f}x)")
+    rng = np.random.default_rng(0)
+    da = _cube(seed=3)
+    ref = da.pheno.PhenoShape(interpolType="linear", rollWindow=5, nGS=52).values
+    for _ in range(5):
+        p = rng.permutation(da.sizes["time"])
+        shuffled = da.isel(time=p)
+        got = shuffled.pheno.PhenoShape(interpolType="linear", rollWindow=5, nGS=52).values
+        np.testing.assert_allclose(got, ref, atol=1e-12, equal_nan=True)
 
 
-def test_the_fix_actually_reduces_the_wrap_step(monkeypatch):
-    """Directly contrasts the two edge modes on the same data, so the improvement is
-    attributable to the fix and not to the test data being easy.
+def test_tied_doys_do_not_change_the_curve():
+    """The same property where it actually bites: duplicated days of year.
+
+    Three years of a 16-day revisit put ties in 36% of real plots, and every plot that
+    failed to reproduce across machines had them.
+    """
+    da = _cube(seed=4, n=60)
+    doy = da["doy"].values.copy()
+    doy[10] = doy[3]                       # force a tie
+    doy[25] = doy[7]
+    tied = da.assign_coords(doy=("time", doy))
+    a = tied.pheno.PhenoShape(interpolType="linear", rollWindow=5, nGS=52).values
+    order = np.argsort(-np.arange(tied.sizes["time"]))     # reverse the input order
+    b = tied.isel(time=order).pheno.PhenoShape(
+        interpolType="linear", rollWindow=5, nGS=52).values
+    np.testing.assert_allclose(a, b, atol=1e-12, equal_nan=True)
+
+
+def test_the_interannual_trend_survives_the_smoothing():
+    """A composite must NOT be forced to close.
+
+    With a genuine interannual trend injected, the year-boundary step has to reflect it.
+    The compositing predicts step ~ -slope: DOY 1 averages observations about a year earlier
+    in real time than DOY 364. A reconstructor or an edge mode that flattens this is
+    deleting information, not cleaning it.
+    """
+    from phenosensing.utils import _getPheno, _moving_average
+
+    rng = np.random.default_rng(11)
+    doy = np.sort(rng.choice(np.arange(1, 366), 90, replace=False)).astype(int)
+    t = np.tile(np.arange(3), 30)[: len(doy)]              # three years
+    steps = []
+    for slope in (-0.10, 0.0, 0.10):
+        y = 0.4 + 0.15 * np.sin(2 * np.pi * (doy - 100) / 365.25) + slope * t
+        i = np.lexsort((y, doy))
+        c = _moving_average(_getPheno(y[i].copy(), doy[i], 52, "linear"), 5, mode="shrink")
+        steps.append(c[0] - c[-1])
+    # monotone in the slope, and the sign is the one the compositing predicts
+    assert steps[0] > steps[1] > steps[2], f"the trend did not reach the boundary: {steps}"
+
+
+def test_the_ends_are_smoothed_as_much_as_the_middle(monkeypatch):
+    """The actual goal: the tails should be as smoothed as the centre -- not forced to meet.
+
+    Legacy left the first and last ``n // 2`` steps raw, so they carried the full
+    observation noise while their neighbours carried a fifth of it. Roughness here is the
+    mean absolute second difference, which measures exactly that.
 
     Numba has to be disabled first. When it is available `PhenoShape` runs `_numba._mov_avg`
     and never touches `utils._moving_average`, so patching only the latter silently compares
-    the fixed path against itself -- which is exactly what this test did on the first
-    attempt, and it is the same trap that would have let a fix land in one path only.
+    the fixed path against itself -- which is what this test did on its first version, and
+    the same trap that would let a fix land in one path only.
     """
     from phenosensing import utils
 
     monkeypatch.setattr(_numba, "NUMBA_AVAILABLE", False)
     da = _cube(seed=7)
-    fixed = da.pheno.PhenoShape(interpolType="linear", rollWindow=5, nGS=52).values
 
+    def edge_vs_middle(arr):
+        f = arr.reshape(arr.shape[0], -1).T
+        r = np.abs(np.diff(f, n=2, axis=1))          # local roughness per step
+        return float(np.median(r[:, [0, 1, -2, -1]])) / float(np.median(r[:, 2:-2]))
+
+    fixed = da.pheno.PhenoShape(interpolType="linear", rollWindow=5, nGS=52).values
     orig = utils._moving_average
     try:
-        utils._moving_average = lambda a, n=3, mode="wrap": orig(a, n, mode="legacy")
+        utils._moving_average = lambda a, n=3, mode="shrink": orig(a, n, mode="legacy")
         legacy = da.pheno.PhenoShape(interpolType="linear", rollWindow=5, nGS=52).values
     finally:
         utils._moving_average = orig
 
-    def wrap_step(arr):
-        f = arr.reshape(arr.shape[0], -1).T
-        return float(np.median(np.abs(f[:, 0] - f[:, -1])))
-
-    assert wrap_step(fixed) < wrap_step(legacy)
+    assert edge_vs_middle(legacy) > 2.0, "the legacy ends should be visibly rougher"
+    assert edge_vs_middle(fixed) < edge_vs_middle(legacy)

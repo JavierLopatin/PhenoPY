@@ -13,8 +13,10 @@ New methods are registered in :data:`RECONSTRUCTORS`; unknown names fall back to
 ``scipy.interpolate.interp1d`` with the name used as the spline ``kind`` (for
 backwards compatibility with the historical ``interpolType`` argument).
 
-``harmonic`` is the only periodic method: it is the one to use when the output has to
-close the year (circular padding downstream, FFT, phase estimation).
+``harmonic`` is the only periodic method. Reach for it when the output *has* to close the
+year (FFT, phase estimation, circular padding downstream) -- and not otherwise: on a
+multi-year composite, forcing ``f(1) == f(365)`` deletes the interannual trend. See its
+docstring for the measurement.
 
 Parametric fits (double-logistic, asymmetric Gaussian) are reimplemented from
 the primary literature and return an all-NaN curve when the per-pixel fit fails
@@ -44,14 +46,22 @@ from scipy.signal import savgol_filter
 def _harmonic(x, y, xnew, n_harmonics=3, period=365.25, **params):
     """Harmonic (Fourier) regression. Periodic by construction: ``f(t) = f(t + period)``.
 
-    The only reconstructor in the registry that closes the year. Every other method treats
-    DOY as an *open* interval, so nothing ties ``f(1)`` to ``f(365)`` and the two ends of
-    the fitted curve are free to disagree -- which they do. Measured on 1,082 Landsat plots
-    in central Chile with ``interpolType="linear"``, the step between DOY 364 and DOY 1 was
-    ~4x the typical week-to-week change and negative in 67-71% of plots.
+    The only reconstructor in the registry that closes the year, and **that is a modelling
+    choice with a cost, not a fix**. Use it when periodicity is genuinely wanted -- a single
+    cycle, an FFT downstream, a phase estimate, circular padding in a convolutional model.
 
-    That matters for anything downstream that assumes the cycle closes: circular padding in
-    a convolutional model, an FFT, a phase estimate, or simply reading the curve as a year.
+    **Do not use it as a default on a multi-year composite.** When observations from several
+    years are collapsed onto DOY, the end of the composite does not join its own beginning:
+    it joins the beginning of the *next* year, and if productivity changed between years the
+    two ends genuinely differ. Forcing them equal deletes that.
+
+    The size of what is deleted, measured on 249 Landsat plots in central Chile (kNDVI,
+    3-year windows): regressing the year-boundary step on the interannual trend gives a
+    slope of **-0.945**, against the -1 the compositing predicts exactly, with r = -0.40.
+    So 16% of the variance in that step is real interannual signal. Empirically, refitting
+    a whole dataset with this method lowered downstream R2 -- including for a Random Forest,
+    which cannot be affected by periodicity because it ignores column order, and so had no
+    reason to worsen unless real information had been removed.
 
     The design matrix is ``1, cos(k w t), sin(k w t)`` for ``k = 1..n_harmonics`` with
     ``w = 2 pi / period``. Three harmonics resolve an annual cycle plus a semi-annual and a

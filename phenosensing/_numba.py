@@ -32,11 +32,15 @@ except ImportError:  # pragma: no cover - exercised only without the [fast] extr
 
 @njit(cache=True)
 def _mov_avg(a, n):
-    """Circular moving average, matching ``utils._moving_average`` with ``mode="wrap"``.
+    """Shrinking-window moving average, matching ``utils._moving_average(mode="shrink")``.
 
     The two implementations have to agree element by element: `PhenoShape` picks one or the
     other depending on whether numba is installed, and a silent divergence between them
-    would make results depend on the environment. `tests/test_numba.py` pins the agreement.
+    would make results depend on the environment. `tests/test_periodicity.py` pins it.
+
+    The window narrows at the ends instead of wrapping. Wrapping would assume the series is
+    one closed cycle; a curve fitted over several years is not, because the end of one year
+    joins the start of the next and the difference between them is real interannual signal.
     """
     m = a.shape[0]
     half = n // 2
@@ -46,12 +50,16 @@ def _mov_avg(a, n):
             out[k] = a[k]
         return out
     for k in range(m):
+        lo = k - half
+        if lo < 0:
+            lo = 0
+        hi = k + half + 1
+        if hi > m:
+            hi = m
         s = 0.0
-        for w in range(n):
-            # the window wraps: index m-1 is adjacent to index 0, which is what makes the
-            # first and last steps of a phenological year share the same neighbourhood
-            s += a[(k - half + w) % m]
-        out[k] = s / n
+        for w in range(lo, hi):
+            s += a[w]
+        out[k] = s / (hi - lo)
     return out
 
 
