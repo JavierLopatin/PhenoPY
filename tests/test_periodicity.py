@@ -271,3 +271,47 @@ def test_the_ends_are_smoothed_as_much_as_the_middle(monkeypatch):
 
     assert edge_vs_middle(legacy) > 2.0, "the legacy ends should be visibly rougher"
     assert edge_vs_middle(fixed) < edge_vs_middle(legacy)
+
+
+# --------------------------------------------------------------------------------------
+# the fast path must not be a second implementation with its own behaviour
+# --------------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("mode", ["shrink", "reflect", "legacy"])
+def test_rollmode_reaches_the_computation(mode):
+    """`rollMode` was added to `_moving_average` before it was plumbed through the accessor,
+    so `PhenoShape(rollMode=...)` silently did nothing on the numba fast path."""
+    da = _cube(seed=1)
+    base = da.pheno.PhenoShape(interpolType="linear", rollWindow=5, nGS=52,
+                               rollMode="shrink").values
+    got = da.pheno.PhenoShape(interpolType="linear", rollWindow=5, nGS=52,
+                              rollMode=mode).values
+    if mode == "shrink":
+        np.testing.assert_allclose(got, base)
+    else:
+        assert not np.allclose(got, base), f"rollMode={mode!r} changed nothing"
+
+
+def test_fast_path_and_pure_python_agree(monkeypatch):
+    """The numba fast path is an optimisation, not a second implementation. It is only
+    entered under conditions listed in `PhenoShape`; each one is load-bearing."""
+    da = _cube(seed=2)
+    fast = da.pheno.PhenoShape(interpolType="linear", rollWindow=5, nGS=52).values
+    monkeypatch.setattr(_numba, "NUMBA_AVAILABLE", False)
+    slow = da.pheno.PhenoShape(interpolType="linear", rollWindow=5, nGS=52).values
+    np.testing.assert_allclose(fast, slow, atol=1e-12, equal_nan=True)
+
+
+def test_fast_path_ties_break_the_same_way_as_the_slow_one(monkeypatch):
+    """The fast path had its own `np.argsort` -- unstable, and fixed separately from
+    `_getPheno0`. With tied DOYs the two paths could disagree."""
+    da = _cube(seed=6, n=60)
+    doy = da["doy"].values.copy()
+    doy[12] = doy[5]
+    doy[30] = doy[9]
+    tied = da.assign_coords(doy=("time", doy))
+    fast = tied.pheno.PhenoShape(interpolType="linear", rollWindow=5, nGS=52).values
+    monkeypatch.setattr(_numba, "NUMBA_AVAILABLE", False)
+    slow = tied.pheno.PhenoShape(interpolType="linear", rollWindow=5, nGS=52).values
+    np.testing.assert_allclose(fast, slow, atol=1e-12, equal_nan=True)

@@ -39,6 +39,7 @@ class Pheno:
         recon_params: dict | None = None,
         chunks: dict | None = None,
         weights: xr.DataArray | None = None,
+        rollMode: str = "shrink",
     ) -> xr.DataArray:
         """
         Reconstruct a smoothed phenological shape per pixel.
@@ -53,6 +54,11 @@ class Pheno:
         :param recon_params: optional dict of method-specific parameters.
         :param chunks: optional spatial chunking (e.g. ``{"x": 300, "y": 300}``) for
             out-of-core / parallel processing; the time axis is kept whole.
+        :param rollMode: how the moving average treats the ends of the curve. ``"shrink"``
+            (default) averages over the neighbours that exist; ``"reflect"`` mirrors;
+            ``"wrap"`` treats the series as one closed cycle and is only appropriate for a
+            single cycle -- on a multi-year composite it deletes the interannual trend;
+            ``"legacy"`` reproduces pre-fix output. See :func:`phenosensing.utils._moving_average`.
         :param weights: optional per-observation weights ``(time, y, x)`` in [0, 1],
             e.g. from :func:`phenosensing.qa.qa_to_weight`. Forwarded to reconstructors
             that support them (notably ``"whittaker"``); ``None`` keeps the
@@ -64,7 +70,11 @@ class Pheno:
         xnew = np.linspace(np.min(doy), np.max(doy), nGS, dtype=np.int32)
 
         # Fast path: Numba-parallel linear reconstruction for in-memory rasters.
-        # Only used where it provably matches the pure-Python path.
+        #
+        # Only used where it provably matches the pure-Python path, and the conditions are
+        # load-bearing. `rollMode` is one of them: `_numba._mov_avg` implements "shrink" and
+        # nothing else, so any other mode has to fall through or the result would silently
+        # depend on whether numba happens to be installed.
         if (
             _numba.NUMBA_AVAILABLE
             and interpolType == "linear"
@@ -73,11 +83,20 @@ class Pheno:
             and chunks is None
             and weights is None
             and stack.chunks is None
+            and rollMode == "shrink"
+            # No tied DOYs. `_getPheno0` breaks ties by each pixel's own value, which the
+            # numba kernel cannot do -- it takes one ordering for the whole raster. Rather
+            # than have the two paths disagree on 36% of real plots, ties fall through to
+            # the pure-Python path. Pinned by
+            # test_fast_path_ties_break_the_same_way_as_the_slow_one.
+            and np.unique(np.asarray(doy)).size == np.asarray(doy).size
             and (rollWindow is None or (isinstance(rollWindow, int) and rollWindow % 2 == 1))
         ):
             arr = np.asarray(stack.transpose("time", "y", "x").values, dtype=np.float64)
             if not np.isnan(arr).any():
-                idx = np.argsort(np.asarray(doy)).astype(np.int64)
+                # No ties here (the guard above ensures it), so a plain sort is already
+                # deterministic and agrees with `_getPheno0`.
+                idx = np.argsort(np.asarray(doy), kind="stable").astype(np.int64)
                 out = _numba.linear_phenoshape(
                     arr,
                     idx,
@@ -107,6 +126,7 @@ class Pheno:
             "rollWindow": rollWindow,
             "nGS": nGS,
             "recon_params": recon_params,
+            "rollMode": rollMode,
         }
         gufunc_kwargs = {
             "output_core_dims": [["doy"]],
